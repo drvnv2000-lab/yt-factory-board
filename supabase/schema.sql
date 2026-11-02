@@ -15,3 +15,21 @@ do $$ declare t text; begin
   end loop;
 end $$;
 alter publication supabase_realtime add table public.channels, public.videos, public.swipe;
+
+-- 2026-11-02: passcode access (no email login). Run once; set the passcode separately (not in this repo):
+--   insert into private.board_key(key) values ('<passcode>');
+create schema if not exists private;
+create table if not exists private.board_key (key text primary key);
+revoke all on schema private from anon, authenticated;
+create or replace function public.board_ok() returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from private.board_key k
+    where k.key = coalesce(nullif(current_setting('request.headers', true), '')::json->>'x-board-key', ''));
+$$;
+revoke all on function public.board_ok() from public;
+grant execute on function public.board_ok() to anon, authenticated;
+do $$ declare t text; begin
+  foreach t in array array['channels','videos','swipe'] loop
+    execute format('drop policy if exists key_all on public.%I', t);
+    execute format('create policy key_all on public.%I for all to anon, authenticated using (public.board_ok()) with check (public.board_ok())', t);
+  end loop;
+end $$;

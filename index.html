@@ -198,12 +198,12 @@ input::placeholder{color:var(--ink-3)}
   </form>
 
   <form class="panel add" id="signin" hidden autocomplete="on">
-    <div class="field"><label for="email">Sign in to edit (we email you a login link, no password)</label>
-    <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="you@gmail.com" required></div>
-    <button class="gold" type="submit">Email me a link</button>
-    <p class="msg" id="signMsg">Only the board owner's email can open the data.</p>
+    <div class="field"><label for="email">Board passcode (asked once on this device)</label>
+    <input id="email" type="password" autocomplete="current-password" placeholder="passcode" required></div>
+    <button class="gold" type="submit">Unlock</button>
+    <p class="msg" id="signMsg">Only someone with the passcode can open the data.</p>
   </form>
-  <div class="banner" id="offline" hidden><svg class="i"><use href="#i-alert"/></svg>The board couldn't reach its saved data. Check your connection and sign-in, then reload.</div>
+  <div class="banner" id="offline" hidden><svg class="i"><use href="#i-alert"/></svg>The board couldn't reach its saved data. Check your connection and passcode, then reload.</div>
 
   <section class="slate" aria-label="Current episode">
     <article class="panel hero" id="hero"></article>
@@ -239,14 +239,15 @@ input::placeholder{color:var(--ink-3)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 // Supabase adapter: same collection/doc API the board used before. Tables: channels, videos, swipe (id text, data jsonb).
-const SB=supabase.createClient("https://ktygzmskutyltgsotbcf.supabase.co","sb_publishable_WfFtMWQMA9qQ9FPSGKUXig_JxJDYCJ2");
+const KEY=(()=>{try{return localStorage.getItem("yfKey")||""}catch(e){return ""}})();
+const SB=supabase.createClient("https://ktygzmskutyltgsotbcf.supabase.co","sb_publishable_WfFtMWQMA9qQ9FPSGKUXig_JxJDYCJ2",{auth:{persistSession:false},global:{headers:{"x-board-key":KEY}}});
 function makeDb(){
   const coll=(name)=>({
     onSnapshot(cb,err){
       const load=async()=>{const {data,error}=await SB.from(name).select("id,data");
         if(error){err&&err(error);return} cb({docs:data.map(r=>({id:r.id,data:()=>r.data||{}}))})};
       load(); SB.channel("rt-"+name).on("postgres_changes",{event:"*",schema:"public",table:name},load).subscribe();
-      coll._reload=coll._reload||{}; coll._reload[name]=load; return ()=>{};
+      coll._reload=coll._reload||{}; coll._reload[name]=load; (window._yfReload=window._yfReload||{})[name]=load; return ()=>{};
     },
     doc(id){return {
       async set(obj){const {error}=await SB.from(name).upsert({id,data:obj});if(error)throw error;coll._reload?.[name]?.()},
@@ -258,14 +259,13 @@ function makeDb(){
   });
   return {collection:coll};
 }
-window.claude={use:async()=>{const {data:{session}}=await SB.auth.getSession(); if(!session){document.getElementById("signin").hidden=false;return null} return makeDb();}};
+window.claude={use:async()=>{const {data}=await SB.rpc("board_ok"); if(data!==true){document.getElementById("signin").hidden=false;return null} return makeDb();}};
 document.addEventListener("DOMContentLoaded",()=>{
   const f=document.getElementById("signin"); if(!f) return;
-  f.addEventListener("submit",async e=>{e.preventDefault();const m=document.getElementById("signMsg");
-    const {error}=await SB.auth.signInWithOtp({email:document.getElementById("email").value.trim(),options:{emailRedirectTo:location.origin+location.pathname}});
-    m.textContent=error?("Couldn't send: "+error.message):"Check your email and tap the link. This page will open signed in.";});
+  f.addEventListener("submit",e=>{e.preventDefault();try{localStorage.setItem("yfKey",document.getElementById("email").value.trim())}catch(err){}location.reload();});
 });
-SB.auth.onAuthStateChange((ev)=>{if(ev==="SIGNED_IN"&&!window._yfBooted){window._yfBooted=1;if(document.getElementById("signin")&&!document.getElementById("signin").hidden)location.reload()}});
+// Realtime can't see the passcode, so refresh data whenever the tab comes back into view.
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)Object.values(window._yfReload||{}).forEach(f=>f())});
 </script>
 <script>
 const STAGES=[
