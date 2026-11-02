@@ -158,6 +158,43 @@ input::placeholder{color:var(--ink-3)}
 
 .banner{display:flex;gap:10px;align-items:center;padding:12px 16px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--warn);font-size:14px}
 @media (prefers-reduced-motion:no-preference){.card,.sw{animation:rise .35s ease both}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+
+/* Production desk (2026-11-03): runner jobs, checks, evidence, scenes, readiness */
+.pill.on b{color:var(--ok)} .pill.off b{color:var(--danger)}
+.prod{padding:22px 24px;display:grid;gap:18px}
+.prod-h{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.prod-h h3{margin:0;font-family:var(--display);font-weight:400;font-size:26px}
+.prod-h select{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px;max-width:100%}
+.ptabs{display:flex;flex-wrap:wrap;gap:6px}
+.ptabs button[aria-pressed="true"]{background:var(--gold-soft);border-color:var(--gold-2);color:var(--gold);font-weight:600}
+.lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.lane{border:1px solid var(--line);border-radius:var(--r);background:var(--raise);padding:12px;display:grid;gap:8px;align-content:start}
+.lane h4{margin:0;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:flex;gap:6px;align-items:center}
+.stp{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.stp:first-of-type{border-top:0}
+.stp .nm{font-weight:500;font-size:14px} .stp .tok{font-size:11px;color:var(--warn);margin-left:4px}
+.stp .st{grid-column:1/-1;font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.stp .st.done{color:var(--ok)} .stp .st.failed{color:var(--danger)} .stp .st.running,.stp .st.queued{color:var(--gold)}
+.stp button{min-height:36px;padding:0 12px;font-size:13px}
+.live{border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:10px;background:var(--raise)}
+.live .bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}.live .bar i{display:block;height:100%;background:var(--gold);transition:width .4s}
+.live pre{margin:0;max-height:240px;overflow:auto;font:12px/1.5 var(--mono);color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
+.chk{display:grid;gap:8px}
+.ck{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.ck .dot2{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:var(--danger)} .ck.ok .dot2{background:var(--ok)} .ck.na .dot2{background:var(--ink-3)}
+.ck b{font-weight:600} .ck small{display:block;color:var(--ink-3);font-size:12px}
+.ck label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink-2);margin-top:4px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-weight:600;color:var(--ink-3);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tbl td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl .s-verified{color:var(--ok);font-weight:600}.tbl .s-wrong{color:var(--danger);font-weight:600}.tbl .s-unverified{color:var(--warn);font-weight:600}
+.tscroll{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:8px}
+.bst{font:11px var(--mono);padding:2px 7px;border-radius:99px;background:var(--raise);border:1px solid var(--line);white-space:nowrap}
+.bst.placeholder{color:var(--danger);border-color:var(--danger)} .bst.real{color:var(--ok)} .bst.graphic{color:var(--gold)}
+.tbl input[type=text]{font:inherit;font-size:13px;width:100%;min-width:140px;min-height:34px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:0 8px}
+.ask{display:grid;grid-template-columns:1fr auto;gap:8px}
+.ask input{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 12px}
+.note{font-size:13px;color:var(--ink-3);margin:0}
 </style>
 </head><body>
 
@@ -208,6 +245,16 @@ input::placeholder{color:var(--ink-3)}
   <section class="slate" aria-label="Current episode">
     <article class="panel hero" id="hero"></article>
     <div class="kpis" id="kpis"></div>
+  </section>
+
+
+  <section class="panel prod" id="prod" aria-labelledby="prod-title">
+    <div class="prod-h">
+      <h3 id="prod-title">Production desk</h3>
+      <select id="prodPick" aria-label="Episode on the desk"></select>
+    </div>
+    <div class="ptabs" id="ptabs" role="group" aria-label="Desk view"></div>
+    <div id="pbody"></div>
   </section>
 
   <form class="add panel" id="addForm" autocomplete="off" novalidate>
@@ -297,6 +344,7 @@ const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"";
 const ic=id=>`<svg class="i" aria-hidden="true"><use href="#${id}"/></svg>`;
 const idx=v=>STAGES.findIndex(s=>s.id===v.stage);
 const gateOk=v=>!!(v.gates&&v.gates[v.stage]);
+let canAdv=gateOk; // the desk script tightens this for the Render stage
 const say=(t,kind="")=>{const m=$("#addMsg");m.className="msg "+kind;m.textContent=t};
 
 function stats(v){
@@ -312,9 +360,9 @@ function gateHTML(v,big){
     : `<label class="cgate ${ok?"ok":""}"><input type="checkbox" data-gate="${esc(v.id)}" ${ok?"checked":""}><span>${esc(s.gate)}</span></label>`;
 }
 function moveBtns(v,labels){
-  const i=idx(v), ok=gateOk(v);
+  const i=idx(v), ok=canAdv(v);
   return `<button data-move="-1" data-id="${esc(v.id)}" ${i<=0?"disabled":""} aria-label="Move back to ${i>0?STAGES[i-1].name:""}">${ic("i-left")}${labels?"Back":""}</button>
-    <button class="${labels?"gold":""}" data-move="1" data-id="${esc(v.id)}" ${i>=STAGES.length-1||!ok?"disabled":""} aria-label="Advance to ${i<STAGES.length-1?STAGES[i+1].name:""}" title="${ok?"Advance":"Tick the gate first"}">${labels?"Advance to "+esc(i<STAGES.length-1?STAGES[i+1].name:""):""}${ic("i-right")}</button>`;
+    <button class="${labels?"gold":""}" data-move="1" data-id="${esc(v.id)}" ${i>=STAGES.length-1||!ok?"disabled":""} aria-label="Advance to ${i<STAGES.length-1?STAGES[i+1].name:""}" title="${ok?"Advance":gateOk(v)?"Render checks not green yet — see Production desk → Checks":"Tick the gate first"}">${labels?"Advance to "+esc(i<STAGES.length-1?STAGES[i+1].name:""):""}${ic("i-right")}</button>`;
 }
 
 function renderPills(){
@@ -419,7 +467,7 @@ document.addEventListener("click",async e=>{
   try{
     if(b.dataset.move){
       const v=videos.find(x=>x.id===b.dataset.id); if(!v) return;
-      if(b.dataset.move==="1"&&!gateOk(v)) return;
+      if(b.dataset.move==="1"&&!canAdv(v)) return;
       const i=idx(v)+Number(b.dataset.move);
       if(i<0||i>=STAGES.length) return;
       await db.collection("videos").doc(v.id).update({stage:STAGES[i].id,updated:Date.now()});
@@ -457,6 +505,164 @@ renderAll();
   db.collection("channels").onSnapshot(s=>{channels=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));if(cur!=="all"&&channels.length&&!channels.some(c=>c.id===cur))cur="all";renderAll()});
   db.collection("videos").onSnapshot(s=>{allVideos=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()},()=>{$("#offline").hidden=false});
   db.collection("swipe").onSnapshot(s=>{allSwipe=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()});
+})();
+</script>
+
+<script>
+// ===== Production desk: board <-> laptop runner (Supabase tables jobs + runner) =====
+const LANES=[
+  {name:"Idea",icon:"i-bulb",steps:[["claude_idea","Outlier check + pattern brief",1]]},
+  {name:"Script",icon:"i-pen",steps:[["claude_script","Draft script",1],["claude_factcheck","Fact-check → evidence desk",1],["narration","Narration text"]]},
+  {name:"Voice",icon:"i-mic",steps:[["voice","Voice (GPU)"],["finalize","Finalize pace + loudness"],["align","Word timings"]]},
+  {name:"Render",icon:"i-clap",steps:[["beatsheet","Beat sheet"],["stock","Fetch stock candidates"],["draft","Draft cut 720p"],["claude_repair","Apply scene notes",1],["final","Final render 1440p"]]},
+  {name:"Laptop",icon:"i-check",steps:[["readiness","Readiness check"],["sync","Sync files now"]]}
+];
+let jobs=[], runner={}, sel=(()=>{try{return localStorage.getItem("yf-sel")||""}catch(e){return ""}})(), ptab="run", showJob=null;
+const now=()=>Date.now();
+const ago=t=>{if(!t)return"";const s=Math.round((now()-t)/1000);return s<60?s+"s ago":s<3600?Math.round(s/60)+"m ago":s<86400?Math.round(s/3600)+"h ago":Math.round(s/86400)+"d ago"};
+const online=()=>runner.seen&&now()-runner.seen<35000;
+function selVideo(){const list=videos.filter(v=>v.stage!=="live");let v=list.find(x=>x.id===sel)||allVideos.find(x=>x.id===sel);
+  if(!v){const order=x=>idx(x)*1e13+(x.updated||0);v=[...list].sort((a,b)=>order(b)-order(a))[0]}return v}
+function lastJob(vid,step){return jobs.filter(j=>j.step===step&&(j.video===vid||(!j.video&&["readiness","sync"].includes(step)))).sort((a,b)=>(b.created||0)-(a.created||0))[0]}
+function activeJob(){return jobs.filter(j=>["running","queued","cancel"].includes(j.status)).sort((a,b)=>(a.created||0)-(b.created||0))[0]}
+
+// Render-stage checks: computed from what the runner synced from the laptop.
+function checks(v){
+  const s=v.sync||{}, o=v.overrides||{}, c=s.claims;
+  const bad=Array.isArray(c)?c.filter(x=>x.status!=="verified"):null;
+  const fin=(s.renders||[]).find(r=>/FINAL/i.test(r.name));
+  return [
+    {id:"facts",name:"Every claim sourced",ok:Array.isArray(c)&&c.length>0&&bad.length===0,
+      detail:!s.at?"Waiting for first sync":!Array.isArray(c)?"No evidence file yet — run Fact-check":bad.length?`${bad.length} of ${c.length} claims not verified`:`${c.length} claims verified`},
+    {id:"rights",name:"Media rights logged",ok:!!s.assets&&s.assets.unlogged.length===0&&s.assets.total>0,
+      detail:!s.assets?"Waiting for first sync":s.assets.total===0?"No assets in the episode folder":s.assets.unlogged.length?`${s.assets.unlogged.length} files missing from LEDGER.csv: ${s.assets.unlogged.slice(0,3).join(", ")}…`:`${s.assets.logged}/${s.assets.total} files in the ledger`},
+    {id:"placeholders",name:"No placeholder scenes",ok:(s.placeholders===0)||!!o.placeholders,ovr:true,
+      detail:s.placeholders==null?"Waiting for first sync":s.placeholders===0?"Every beat has a real visual":`${s.placeholders} beats have no visual in the draft${o.placeholders?" — owner confirmed the final cut covers them":""}`},
+    {id:"final",name:"Final render exists",ok:!!fin,detail:fin?`${fin.name} · ${(fin.mb/1000).toFixed(1)} GB · ${ago(fin.at)}`:"Run Final render"}
+  ];
+}
+const checksOk=v=>checks(v).every(c=>c.ok);
+// Advance out of Render needs the gate tick AND all checks green.
+canAdv=v=>gateOk(v)&&(v.stage!=="render"||checksOk(v));
+
+async function queue(step,args){
+  const v=selVideo(); if(!db) return;
+  const id="j"+now().toString(36)+Math.random().toString(36).slice(2,5);
+  await db.collection("jobs").doc(id).set({step,video:["readiness","sync"].includes(step)?"":(v&&v.id||""),channel:v&&(v.channel||"business-docs")||"",ep:v&&v.ep||"",args:args||{},status:"queued",created:now(),by:"board"});
+  showJob=id; window._yfReload?.jobs?.();
+}
+function stepRow(v,[step,label,tok]){
+  const j=v&&lastJob(v.id,step); const st=j?j.status:"";
+  const busy=["queued","running","cancel"].includes(st);
+  const txt=!j?"never run":st==="running"?`running ${j.progress!=null?j.progress+"%":""}`:st==="queued"?(online()?"queued":"queued — starts when the laptop runner is on"):st==="done"?`done ${ago(j.ended)}`:st==="failed"?`failed ${ago(j.ended)} — ${j.error||""}`:st==="cancelled"?`cancelled ${ago(j.ended)}`:st;
+  const needEp=!["readiness","sync","claude_idea"].includes(step)&&!(v&&v.ep);
+  return `<div class="stp"><span class="nm">${esc(label)}${tok?'<span class="tok" title="Uses your Claude Code usage">· Claude</span>':""}</span>
+    <button data-run="${step}" ${busy||needEp||!v?"disabled":""} title="${needEp?"Set an episode number on this card first":""}">${busy?"…":"Run"}</button>
+    <span class="st ${esc(st)}">${j?`<a href="#" data-showjob="${esc(j.id)}">${esc(txt)}</a>`:esc(txt)}</span></div>`;
+}
+function liveBox(){
+  const j=jobs.find(x=>x.id===showJob)||activeJob(); if(!j) return `<p class="note">No job running. Press Run on any step — the laptop runner picks it up (one GPU job at a time).</p>`;
+  const busy=["running","queued"].includes(j.status);
+  return `<div class="live" aria-live="polite"><div class="prod-h"><b>${esc(j.label||j.step)} · ${esc(j.channel)} ${esc(j.ep)} · ${esc(j.status)}${j.progress!=null?" · "+j.progress+"%":""}</b>
+    ${busy?`<button class="danger" data-cancel-job="${esc(j.id)}">Cancel</button>`:""}</div>
+    <div class="bar"><i style="width:${j.status==="done"?100:(j.progress||0)}%"></i></div>
+    ${j.error?`<p class="msg err">${esc(j.error)}</p>`:""}
+    <pre>${esc((j.log||[]).slice(-18).join("\n"))||"waiting for output…"}</pre></div>`;
+}
+function tabRun(v){
+  return `<div class="lanes">${LANES.map(l=>`<div class="lane"><h4>${ic(l.icon)}${l.name}</h4>${l.steps.map(s=>stepRow(v,s)).join("")}</div>`).join("")}</div>
+  ${liveBox()}
+  <form class="ask" id="askForm"><input id="askIn" placeholder="Ask Claude to do something on this episode (uses Claude usage)…" aria-label="Task for Claude"><button class="gold" type="submit">Send</button></form>`;
+}
+function tabChecks(v){
+  return `<div class="chk">${checks(v).map(c=>`<div class="ck ${c.ok?"ok":""}"><span class="dot2" aria-hidden="true"></span><div><b>${esc(c.name)}</b><small>${esc(c.detail)}</small>
+    ${c.ovr&&v.sync&&v.sync.placeholders>0?`<label><input type="checkbox" data-ovr="${c.id}" ${(v.overrides||{})[c.id]?"checked":""}> I checked the final cut — no placeholders on screen</label>`:""}</div></div>`).join("")}</div>
+    <p class="note">Advance from Render unlocks only when all four are green and the Render gate is ticked. Last sync: ${v.sync&&v.sync.at?ago(v.sync.at):"never"}.</p>`;
+}
+function tabEvidence(v){
+  const c=v.sync&&v.sync.claims;
+  if(!Array.isArray(c)) return `<p class="note">No evidence file yet. Run <b>Fact-check</b> (Script lane): Claude lists every claim with a source into research/${esc(v.ep||"EP")}-claims.json and it shows up here.</p>`;
+  const n=k=>c.filter(x=>x.status===k).length;
+  return `<p class="note">${n("verified")} verified · ${n("unverified")} unverified · ${n("wrong")} wrong</p>
+  <div class="tscroll"><table class="tbl"><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody>
+  ${c.map(x=>`<tr><td>${esc(x.claim)}${x.note?`<br><small class="note">${esc(x.note)}</small>`:""}</td><td class="s-${esc(x.status)}">${esc(x.status)}</td><td>${safeUrl(x.source)?`<a href="${esc(x.source)}" target="_blank" rel="noopener">${esc(x.source.replace(/^https?:\/\/(www\.)?/,"").slice(0,40))}</a>`:esc(x.source||"—")}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+let sceneFilter="all";
+function tabScenes(v){
+  const b=(v.sync&&v.sync.beats)||[]; if(!b.length) return `<p class="note">No beat sheet synced yet. Run <b>Beat sheet</b> (Render lane).</p>`;
+  const rep=v.repairs||{}; const f=sceneFilter==="all"?b:b.filter(x=>x.st===sceneFilter||(sceneFilter==="notes"&&rep[x.i]));
+  const mm=t=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`;
+  return `<div class="ptabs">${["all","placeholder","real","graphic","notes"].map(k=>`<button data-sf="${k}" aria-pressed="${k===sceneFilter}">${k} ${k==="all"?b.length:k==="notes"?Object.keys(rep).length:b.filter(x=>x.st===k).length}</button>`).join("")}
+    <button class="gold" data-repair="1" ${Object.keys(rep).length?"":"disabled"}>${ic("i-check")}Send notes to Claude</button></div>
+  <div class="tscroll"><table class="tbl"><thead><tr><th>#</th><th>Time</th><th>Narration / planned visual</th><th>Status</th><th>Your note</th><th>Lock</th></tr></thead><tbody>
+  ${f.map(x=>{const r=rep[x.i]||{};return `<tr><td>${x.i}</td><td style="font-family:var(--mono)">${mm(x.t)}<br><small class="note">${x.len}s</small></td>
+    <td>${esc(x.says)}<br><small class="note">${esc(x.type)} · ${esc(x.visual)}</small></td><td><span class="bst ${esc(x.st)}">${esc(x.st)}</span></td>
+    <td><input type="text" data-note="${x.i}" value="${esc(r.note||"")}" placeholder="e.g. use a map here"></td>
+    <td><input type="checkbox" data-lock="${x.i}" ${r.lock?"checked":""} aria-label="Lock beat ${x.i}"></td></tr>`}).join("")}
+  </tbody></table></div><p class="note">Notes save when you leave the box and reach the laptop on the next sync as edit/${esc(v.ep||"EP")}-repairs.json. Locked beats are never changed.</p>`;
+}
+function tabLaptop(){
+  const r=runner.readiness; const s=runner.seen;
+  return `<p class="note">Runner ${online()?`<b style="color:var(--ok)">online</b> on ${esc(runner.host||"laptop")} · v${esc(runner.version||"")}${runner.busy?" · busy":""}`:`<b style="color:var(--danger)">offline</b>${s?" · last seen "+ago(s):""} — double-click <b>YouTube Factory\\shared\\runner\\START-RUNNER.bat</b> (or INSTALL-AUTOSTART.bat once)`}</p>
+  ${r?`<div class="chk">${r.checks.map(c=>`<div class="ck ${c.ok?"ok":""}"><span class="dot2"></span><div><b>${esc(c.name)}</b><small>${esc(c.detail)}${!c.ok&&c.fix?" → "+esc(c.fix):""}</small></div></div>`).join("")}</div><p class="note">Checked ${ago(r.at)}.</p>`:`<p class="note">No readiness check yet.</p>`}
+  <button data-run="readiness" class="gold">Run readiness check</button>`;
+}
+function tabFiles(v){
+  const s=v.sync||{};
+  return `<div class="chk">
+    <div class="ck ${s.script?"ok":""}"><span class="dot2"></span><div><b>Script</b><small>${s.script?"in scripts/":"none yet"}</small></div></div>
+    <div class="ck ${s.voice?"ok":""}"><span class="dot2"></span><div><b>Final voice</b><small>${s.voice?`voice/${esc(v.ep)}-voice-FINAL.mp3`:"not rendered"}</small></div></div>
+    ${(s.renders||[]).map(r=>`<div class="ck ok"><span class="dot2"></span><div><b>${esc(r.name)}</b><small>${r.mb} MB · ${ago(r.at)}</small></div></div>`).join("")||`<div class="ck"><span class="dot2"></span><div><b>Renders</b><small>none yet</small></div></div>`}
+  </div>`;
+}
+function renderProd(){
+  const pick=$("#prodPick"); if(!pick) return;
+  const list=videos.filter(v=>v.stage!=="live"); const v=selVideo();
+  pick.innerHTML=list.map(x=>`<option value="${esc(x.id)}" ${v&&x.id===v.id?"selected":""}>${x.ep?"EP "+esc(x.ep)+" · ":""}${esc(x.title||"Untitled")}</option>`).join("")||`<option>No episode in production</option>`;
+  const tabs=[["run","Run"],["checks","Checks"],["evidence","Evidence"],["scenes","Scenes"],["files","Files"],["laptop","Laptop"]];
+  $("#ptabs").innerHTML=tabs.map(([k,n])=>`<button data-ptab="${k}" aria-pressed="${k===ptab}">${n}${k==="checks"&&v?` ${checks(v).filter(c=>c.ok).length}/4`:""}</button>`).join("");
+  if(document.activeElement&&document.activeElement.matches("#pbody input[type=text],#askIn")) return; // don't wipe typing
+  $("#pbody").innerHTML=!db?`<p class="note">Unlock the board to use the desk.</p>`:ptab==="laptop"?tabLaptop():!v?`<p class="note">Add an idea to start.</p>`:
+    ({run:tabRun,checks:tabChecks,evidence:tabEvidence,scenes:tabScenes,files:tabFiles}[ptab])(v);
+  const runPill=document.getElementById("runPill");
+  if(runPill){runPill.className="pill "+(online()?"on":"off");runPill.innerHTML=`${ic("i-clock")}Laptop <b>${online()?(runner.busy?"working":"ready"):"offline"}</b>`}
+}
+const _renderAll=renderAll; renderAll=function(){_renderAll();const p=$("#pills");if(p&&!document.getElementById("runPill"))p.insertAdjacentHTML("afterbegin",`<span class="pill" id="runPill"></span>`);renderProd()};
+
+document.addEventListener("click",async e=>{
+  const a=e.target.closest("[data-showjob]"); if(a){e.preventDefault();showJob=a.dataset.showjob;ptab="run";renderProd();return}
+  const b=e.target.closest("button"); if(!b||!db) return;
+  try{
+    if(b.dataset.ptab){ptab=b.dataset.ptab;renderProd()}
+    else if(b.dataset.sf){sceneFilter=b.dataset.sf;renderProd()}
+    else if(b.dataset.run){b.disabled=true;await queue(b.dataset.run)}
+    else if(b.dataset.cancelJob){const j=jobs.find(x=>x.id===b.dataset.cancelJob);if(j)await db.collection("jobs").doc(j.id).update({status:j.status==="queued"?"cancelled":"cancel",ended:now()})}
+    else if(b.dataset.repair){await queue("claude_repair");ptab="run";renderProd()}
+  }catch(err){say("Couldn't reach the board: "+(err&&err.message||"try again"),"err")}
+});
+document.addEventListener("change",async e=>{
+  const t=e.target; const v=selVideo(); if(!db||!v) return;
+  if(t.id==="prodPick"){sel=t.value;try{localStorage.setItem("yf-sel",sel)}catch(e){}showJob=null;renderProd();return}
+  if(t.dataset.ovr){await db.collection("videos").doc(v.id).update({overrides:{...(v.overrides||{}),[t.dataset.ovr]:t.checked},updated:now()});return}
+  if(t.dataset.lock!==undefined||t.dataset.note!==undefined){
+    const i=t.dataset.lock??t.dataset.note; const rep={...(v.repairs||{})}; const r={...(rep[i]||{})};
+    if(t.dataset.lock!==undefined) r.lock=t.checked; else r.note=t.value.trim();
+    if(!r.note&&!r.lock) delete rep[i]; else rep[i]=r;
+    await db.collection("videos").doc(v.id).update({repairs:rep,updated:now()});
+  }
+});
+document.addEventListener("submit",async e=>{
+  if(e.target.id!=="askForm") return; e.preventDefault();
+  const q=$("#askIn").value.trim(); if(!q) return; $("#askIn").value=""; await queue("claude_ask",{prompt:q});
+});
+(async()=>{
+  // wait for the main script's db, then subscribe to jobs + runner and poll while visible (realtime can't see the passcode)
+  for(let i=0;i<50&&!db;i++) await new Promise(r=>setTimeout(r,200));
+  if(!db) return;
+  db.collection("jobs").onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()});
+  db.collection("runner").onSnapshot(s=>{const d=s.docs.find(x=>x.id==="laptop");runner=d?d.data():{};renderAll()});
+  setInterval(()=>{if(!document.hidden){window._yfReload?.jobs?.();window._yfReload?.runner?.();const busy=activeJob();if(busy||Math.random()<.25)window._yfReload?.videos?.()}},4000);
 })();
 </script>
 

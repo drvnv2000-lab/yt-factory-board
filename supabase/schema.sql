@@ -33,3 +33,15 @@ do $$ declare t text; begin
     execute format('create policy key_all on public.%I for all to anon, authenticated using (public.board_ok()) with check (public.board_ok())', t);
   end loop;
 end $$;
+
+-- 2026-11-03: pipeline runner. jobs = queue the board writes and the laptop runner executes; runner = laptop heartbeat + readiness.
+create table if not exists public.jobs   (id text primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz default now());
+create table if not exists public.runner (id text primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz default now());
+do $$ declare t text; begin
+  foreach t in array array['jobs','runner'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists key_all on public.%I', t);
+    execute format('create policy key_all on public.%I for all to anon, authenticated using (public.board_ok()) with check (public.board_ok())', t);
+  end loop;
+end $$;
+create index if not exists jobs_status on public.jobs ((data->>'status'));
