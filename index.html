@@ -327,6 +327,7 @@ input::placeholder{color:var(--ink-3)}
   <section aria-labelledby="pipe-h">
     <div class="sh"><h3 id="pipe-h">Pipeline</h3><p>Tick a stage's gate to unlock Advance. Claude proposes, you approve.</p></div>
     <div class="board-scroll"><div class="board" id="board"></div></div>
+    <div id="parked"></div>
   </section>
 
   <section aria-labelledby="swipe-h">
@@ -396,7 +397,7 @@ function applyChannel(){
 }
 function renderTabs(){
   const list=[{id:"all",name:"All channels"},...channels];
-  $("#tabs").innerHTML=list.map(c=>`<button data-ch="${esc(c.id)}" aria-current="${c.id===cur}">${c.id==="all"?"":'<span class="dot" aria-hidden="true"></span>'}${esc(c.name)}<span class="chtag">${allVideos.filter(v=>c.id==="all"||(v.channel||"business-docs")===c.id).filter(v=>v.stage!=="live").length}</span></button>`).join("")+`<button class="addch" data-newch="1">${ic("i-plus")}New channel</button>`;
+  $("#tabs").innerHTML=list.map(c=>`<button data-ch="${esc(c.id)}" aria-current="${c.id===cur}">${c.id==="all"?"":'<span class="dot" aria-hidden="true"></span>'}${esc(c.name)}<span class="chtag">${allVideos.filter(v=>c.id==="all"||(v.channel||"business-docs")===c.id).filter(v=>v.stage!=="live"&&!v.parked).length}</span></button>`).join("")+`<button class="addch" data-newch="1">${ic("i-plus")}New channel</button>`;
   $("#chPickWrap").hidden=cur!=="all";
   $("#chPick").innerHTML=channels.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
   const c=channels.find(x=>x.id===cur);
@@ -929,4 +930,47 @@ document.addEventListener("change",async e=>{
 renderAll();
 </script>
 
+<script>
+/* Park / delete episodes. Parked = off the slate, board, desk and autopilot; files on the laptop are kept. */
+let parked=[], parkOpen=false;
+document.addEventListener("toggle",e=>{if(e.target.id==="parkBox")parkOpen=e.target.open},true);
+const _apply=applyChannel;
+applyChannel=function(){_apply();parked=videos.filter(v=>v.parked);videos=videos.filter(v=>!v.parked)};
+const _selV=selVideo;
+selVideo=function(){const v=_selV();return v&&v.parked?null:v};
+async function stopJobs(vid){
+  for(const j of jobs.filter(j=>j.video===vid&&["queued","running"].includes(j.status)))
+    await db.collection("jobs").doc(j.id).update({status:j.status==="queued"?"cancelled":"cancel",ended:now(),error:"episode parked or deleted"});
+}
+const parkBtns=(v,big)=>`<button class="${big?"":"ghost"}" data-park="${esc(v.id)}" title="Park: take it off the slate for now">${big?"⏸ Park":"⏸"}</button>`+
+  (big?`<button class="danger" data-vdel="${esc(v.id)}">Delete</button>`:"");
+const _card2=card;
+card=v=>_card2(v).replace('<div class="acts">','<div class="acts">'+parkBtns(v,false));
+const _hero=renderHero;
+renderHero=function(){_hero();const order=v=>idx(v)*1e13+(v.updated||0);
+  const top=videos.filter(v=>v.stage!=="live").sort((a,b)=>order(b)-order(a))[0];
+  const row=$("#hero .row"); if(top&&row) row.insertAdjacentHTML("beforeend",parkBtns(top,true));};
+function renderParked(){const el=$("#parked"); if(!el) return;
+  el.innerHTML=!parked.length?"":`<details id="parkBox" class="panel" ${parkOpen?"open":""} style="margin-top:14px;padding:12px 16px"><summary><b>Parked</b> · ${parked.length} episode${parked.length>1?"s":""} on hold</summary>
+  ${parked.sort((a,b)=>(b.parkedAt||0)-(a.parkedAt||0)).map(v=>`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line,#333)">
+    <span style="flex:1;min-width:180px">${v.ep?"EP "+esc(v.ep)+" · ":""}${esc(v.title||"Untitled")} <span class="chip">${esc((STAGES[idx(v)]||{}).name||"")}</span>${v.parkNote?` <i style="opacity:.7">— ${esc(v.parkNote)}</i>`:""}</span>
+    <button class="gold" data-unpark="${esc(v.id)}">▶ Back on the slate</button><button class="danger" data-vdel="${esc(v.id)}">Delete</button></div>`).join("")}</details>`;}
+const _all=renderAll;
+renderAll=function(){_all();renderParked()};
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b||!db) return;
+  try{
+    if(b.dataset.park){const v=allVideos.find(x=>x.id===b.dataset.park); if(!v) return;
+      const note=prompt("Park “"+(v.title||"this episode")+"”. Optional reason (leave blank to skip):",""); if(note===null) return;
+      await stopJobs(v.id); await db.collection("videos").doc(v.id).update({parked:true,parkedAt:now(),parkNote:note.trim(),updated:Date.now()});
+      if(sel===v.id) sel=""; say("Parked. It's under “Parked” below the board.","good")}
+    else if(b.dataset.unpark){await db.collection("videos").doc(b.dataset.unpark).update({parked:false,parkNote:"",updated:Date.now()});say("Back on the slate.","good")}
+    else if(b.dataset.vdel){const v=allVideos.find(x=>x.id===b.dataset.vdel); if(!v) return;
+      if(!confirm("Delete “"+(v.title||"this episode")+"” from the board?\n\nThis can't be undone. Its files on the laptop are kept.")) return;
+      await stopJobs(v.id); await db.collection("videos").doc(v.id).delete(); if(sel===v.id) sel=""; say("Deleted from the board.","good")}
+    else if(b.dataset.del&&b.dataset.confirm) await stopJobs(b.dataset.del);   // existing card trash button
+  }catch(err){say("Couldn't save that change: "+(err&&err.message||"try again."),"err")}
+},true);
+if(db) renderAll();
+</script>
 </body></html>
