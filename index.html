@@ -613,7 +613,7 @@ function tabRun(v){
 function tabChecks(v){
   return `<div class="chk">${checks(v).map(c=>`<div class="ck ${c.ok?"ok":""}"><span class="dot2" aria-hidden="true"></span><div><b>${esc(c.name)}</b><small>${esc(c.detail)}</small>
     ${c.ovr&&v.sync&&v.sync.placeholders>0?`<label><input type="checkbox" data-ovr="${c.id}" ${(v.overrides||{})[c.id]?"checked":""}> I checked the final cut — no placeholders on screen</label>`:""}</div></div>`).join("")}</div>
-    <p class="note">Advance from Render unlocks only when all four are green and the Render gate is ticked. Last sync: ${v.sync&&v.sync.at?ago(v.sync.at):"never"}.</p>`;
+    <p class="note">Advance from Render unlocks only when every check is green and the Render gate is ticked. Last sync: ${v.sync&&v.sync.at?ago(v.sync.at):"never"}.</p>`;
 }
 function tabEvidence(v){
   const c=v.sync&&v.sync.claims;
@@ -657,7 +657,7 @@ function renderProd(){
   const list=videos.filter(v=>v.stage!=="live"); const v=selVideo();
   pick.innerHTML=list.map(x=>`<option value="${esc(x.id)}" ${v&&x.id===v.id?"selected":""}>${x.ep?"EP "+esc(x.ep)+" · ":""}${esc(x.title||"Untitled")}</option>`).join("")||`<option>No episode in production</option>`;
   const tabs=[["run","Run"],["checks","Checks"],["evidence","Evidence"],["scenes","Scenes"],["files","Files"],["laptop","Laptop"]];
-  $("#ptabs").innerHTML=tabs.map(([k,n])=>`<button data-ptab="${k}" aria-pressed="${k===ptab}">${n}${k==="checks"&&v?` ${checks(v).filter(c=>c.ok).length}/4`:""}</button>`).join("");
+  $("#ptabs").innerHTML=tabs.map(([k,n])=>`<button data-ptab="${k}" aria-pressed="${k===ptab}">${n}${k==="checks"&&v?` ${checks(v).filter(c=>c.ok).length}/${checks(v).length}`:""}</button>`).join("");
   if(document.activeElement&&document.activeElement.matches("#pbody input[type=text],#askIn")) return; // don't wipe typing
   $("#pbody").innerHTML=!db?`<p class="note">Unlock the board to use the desk.</p>`:ptab==="laptop"?tabLaptop():!v?`<p class="note">Add an idea to start.</p>`:
     ({run:tabRun,checks:tabChecks,evidence:tabEvidence,scenes:tabScenes,files:tabFiles}[ptab])(v);
@@ -774,6 +774,41 @@ document.addEventListener("change",async e=>{
   if(t.dataset.pub){const v=selVideo();if(!v||!db)return;await db.collection("videos").doc(v.id).update({publish:{...(v.publish||{}),[t.dataset.pub]:t.checked},updated:now()})}
 });
 $("#swTools").addEventListener("submit",e=>e.preventDefault());
+renderAll();
+</script>
+
+<script>
+// ===== Autopilot chains, auto-QC check, production health (2026-11-03c) =====
+const CHAINS={Script:["claude_script","claude_factcheck"],Voice:["narration","voice","finalize","align"],Render:["beatsheet","stock","draft","qc"]};
+LANES.find(l=>l.name==="Render").steps.push(["qc","Auto QC (latest render)"]);
+const STOPS={Script:"Stops for you to approve the script.",Voice:"Stops for you to listen to the voice.",Render:"Stops for you to watch the draft + QC."};
+const latestQC=v=>{const r=((v.sync||{}).renders||[]).filter(r=>r.qc).sort((a,b)=>(/FINAL/i.test(b.name)-/FINAL/i.test(a.name))||(b.at-a.at))[0];return r};
+const _checks=checks;
+checks=function(v){const c=_checks(v);const r=((v.sync||{}).renders||[]).find(r=>/FINAL/i.test(r.name));const q=r&&r.qc;
+  c.push({id:"qc",name:"Auto QC clean (final render)",ok:!!q&&q.high===0,detail:!r?"No final render yet":!q?"Run Auto QC on the final render":q.high?`${q.high} serious issues — see Files`:`${q.n} minor notes · ${q.avgCut}s per visual change · ${q.lufs} LUFS`});return c};
+const _tabRun=tabRun;
+tabRun=function(v){let h=_tabRun(v);
+  for(const [lane,chain] of Object.entries(CHAINS)){
+    const busy=jobs.some(j=>["queued","running"].includes(j.status)&&j.video===(v&&v.id)&&(j.args||{}).chain===lane);
+    h=h.replace(new RegExp(`(<h4>[\\s\\S]*?${lane}</h4>)`),`$1<button class="gold" data-chain="${lane}" ${busy||!v||!v.ep?"disabled":""} title="${chain.join(" → ")}. ${STOPS[lane]}">${busy?"Autopilot running…":"▶ Autopilot: whole "+lane.toLowerCase()+" stage"}</button>`)}
+  return h};
+const _tabFiles=tabFiles;
+tabFiles=function(v){
+  const mine=jobs.filter(j=>j.video===v.id&&j.started&&j.ended&&j.status==="done");
+  const hrs=mine.reduce((t,j)=>t+(j.ended-j.started),0)/36e5;
+  const by={};mine.forEach(j=>{by[j.step]=(by[j.step]||0)+(j.ended-j.started)/6e4});
+  const fin=((v.sync||{}).renders||[]).find(r=>/FINAL/i.test(r.name)&&r.qc), mins=fin?fin.qc.duration/60:0;
+  const health=`<div class="ck ${mins?"ok":"na"}"><span class="dot2"></span><div><b>Production health: ${mins?(hrs/mins*60).toFixed(1)+" laptop-minutes per finished minute":"needs a QC'd final render"}</b><small>${hrs.toFixed(1)} h of runner work logged${Object.keys(by).length?" · "+Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,m])=>`${k} ${m<60?Math.round(m)+"m":(m/60).toFixed(1)+"h"}`).join(" · "):""}</small></div></div>`;
+  const qcs=((v.sync||{}).renders||[]).filter(r=>r.qc).map(r=>`<div class="ck ${r.qc.high?"":"ok"}"><span class="dot2"></span><div><b>QC · ${esc(r.name)}</b><small>${Math.round(r.qc.duration/60)} min · ${r.qc.cuts} visual changes (avg ${r.qc.avgCut}s, target ≤4s) · longest static ${r.qc.longestStatic}s · ${r.qc.lufs} LUFS · peak ${r.qc.peak} dBFS</small>
+    ${r.qc.issues.length?`<small>${r.qc.issues.map(x=>`${x.sev==="high"?"⚠ ":""}${esc(x.what)}`).join("<br>")}${r.qc.n>r.qc.issues.length?`<br>…and ${r.qc.n-r.qc.issues.length} more`:""}</small>`:""}
+    <small>Contact sheet saved next to the video on the laptop.</small></div></div>`).join("");
+  return `<div class="chk">${health}${qcs}</div>`+_tabFiles(v);
+};
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-chain]"); if(!b||!db) return;
+  const chain=CHAINS[b.dataset.chain]; b.disabled=true;
+  try{await queue(chain[0],{then:chain.slice(1),chain:b.dataset.chain})}catch(err){say("Couldn't start autopilot: "+(err&&err.message||""),"err")}
+});
 renderAll();
 </script>
 
