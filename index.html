@@ -196,6 +196,27 @@ input::placeholder{color:var(--ink-3)}
 .ask input{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 12px}
 .note{font-size:13px;color:var(--ink-3);margin:0}
 
+/* 2026-11-03d: package lab, stale, score */
+.stale{color:var(--warn)!important;font-weight:600}
+.banner2{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--warn);border-radius:var(--r);background:var(--gold-soft)}
+.score{font:12px var(--mono);padding:3px 8px;border-radius:99px;border:1px solid var(--line);width:fit-content}
+.score.make{color:var(--ok);border-color:var(--ok)}.score.rework{color:var(--warn);border-color:var(--warn)}.score.drop{color:var(--danger);border-color:var(--danger)}
+.pk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}@media(max-width:900px){.pk{grid-template-columns:1fr}}
+.pkl{display:grid;gap:6px}
+.pki{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.pki.on{border-color:var(--gold);background:var(--gold-soft)} .pki small{display:block;color:var(--ink-3);font-size:12px}
+.th{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;display:flex;align-items:center;padding:6%;font-family:var(--ui);color:#fff}
+.th .tx{font-weight:800;line-height:.95;text-transform:uppercase;letter-spacing:-.01em;text-shadow:0 2px 0 rgba(0,0,0,.35);max-width:58%;font-size:clamp(14px,4.2cqw,40px)}
+.th .sb{position:absolute;bottom:6%;font:600 10px var(--mono);opacity:.85;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:4px;max-width:44%}
+.th.right-subject .tx{margin-left:auto;text-align:right}.th.right-subject .sb{left:6%}.th.left-subject .sb,.th.center .sb,.th.split .sb{right:6%}
+.th.center{justify-content:center;text-align:center}.th.center .tx{max-width:90%}
+.thgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;container-type:inline-size}
+.thgrid .pki{display:block;padding:6px}.thgrid .th{container-type:inline-size}
+.phone{width:360px;max-width:100%;background:#0f0f0f;border-radius:22px;padding:14px 10px;display:grid;gap:14px;color:#f1f1f1;font-family:Roboto,Arial,sans-serif}
+.yt .th{border-radius:10px;container-type:inline-size}.yt .tt{display:flex;gap:10px;margin-top:8px}.yt .av{width:34px;height:34px;border-radius:50%;background:#555;flex:none}
+.yt b{font-weight:500;font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.yt small{color:#aaa;font-size:12px}
+.srch{display:grid;grid-template-columns:168px 1fr;gap:8px;align-items:start}.srch .th{container-type:inline-size}.srch b{font-size:13px;font-weight:500;line-height:1.3}
+
 /* 2026-11-03b: channel edit, swipe scanner, publish gate */
 .newch textarea,.newch input{font:inherit}
 .chedit{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:16px;align-items:end}
@@ -256,6 +277,13 @@ input::placeholder{color:var(--ink-3)}
     <div class="field wide"><label for="ceNiche">Niche</label><input id="ceNiche"></div>
     <div class="field wide"><label for="ceComp">Competitor channels for scans (comma separated, e.g. @MagnatesMedia, @JakeTran)</label><input id="ceComp"></div>
     <div class="field wide"><label for="ceKw">Niche keywords to scan (comma separated)</label><input id="ceKw" placeholder="e.g. family dynasty documentary, company collapse"></div>
+    <div class="field"><label for="ceEng">Voice engine</label><select id="ceEng" style="min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px"><option value="chatterbox">Chatterbox</option><option value="kokoro">Kokoro</option></select></div>
+    <div class="field"><label for="ceKv">Kokoro voice (if Kokoro)</label><input id="ceKv" placeholder="e.g. am_fenrir"></div>
+    <div class="field"><label for="cePace">Pace (atempo, 0.8–1.1)</label><input id="cePace" inputmode="decimal"></div>
+    <div class="field"><label for="ceEx">Emotion (exaggeration 0.3–0.8)</label><input id="ceEx" inputmode="decimal"></div>
+    <div class="field"><label for="ceCfg">cfg_weight</label><input id="ceCfg" inputmode="decimal"></div>
+    <div class="field"><label for="ceSeed">Voice seed</label><input id="ceSeed" inputmode="numeric"></div>
+    <div class="field wide"><label for="ceStyle">Style notes for Claude (tone, words to avoid, hook style, visual identity)</label><textarea id="ceStyle" rows="3" style="font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:8px 12px"></textarea></div>
     <div class="row"><button class="gold" type="submit">Save channel</button> <button type="button" data-cecancel="1">Cancel</button></div>
     <p class="msg">The folder name (<span id="ceId"></span>) stays the same, so nothing on the laptop breaks.</p>
   </form>
@@ -660,7 +688,7 @@ function renderProd(){
   $("#ptabs").innerHTML=tabs.map(([k,n])=>`<button data-ptab="${k}" aria-pressed="${k===ptab}">${n}${k==="checks"&&v?` ${checks(v).filter(c=>c.ok).length}/${checks(v).length}`:""}</button>`).join("");
   if(document.activeElement&&document.activeElement.matches("#pbody input[type=text],#askIn")) return; // don't wipe typing
   $("#pbody").innerHTML=!db?`<p class="note">Unlock the board to use the desk.</p>`:ptab==="laptop"?tabLaptop():!v?`<p class="note">Add an idea to start.</p>`:
-    ({run:tabRun,checks:tabChecks,evidence:tabEvidence,scenes:tabScenes,files:tabFiles}[ptab])(v);
+    (({run:tabRun,checks:tabChecks,evidence:tabEvidence,scenes:tabScenes,files:tabFiles}[ptab])||(()=>""))(v);
   const runPill=document.getElementById("runPill");
   if(runPill){runPill.className="pill "+(online()?"on":"off");runPill.innerHTML=`${ic("i-clock")}Laptop <b>${online()?(runner.busy?"working":"ready"):"offline"}</b>`}
 }
@@ -744,7 +772,7 @@ function openEdit(){const c=channels.find(x=>x.id===cur);if(!c)return;const f=$(
 const list=s=>s.split(",").map(x=>x.trim()).filter(Boolean);
 $("#chEdit").addEventListener("submit",async e=>{e.preventDefault();if(!db)return;
   const name=$("#ceName").value.trim();if(!name)return;
-  try{await db.collection("channels").doc(cur).update({name,length:$("#ceLen").value.trim(),cadence:$("#ceCad").value.trim(),niche:$("#ceNiche").value.trim(),competitors:list($("#ceComp").value),keywords:list($("#ceKw").value),updated:now()});
+  try{await db.collection("channels").doc(cur).update({name,length:$("#ceLen").value.trim(),cadence:$("#ceCad").value.trim(),niche:$("#ceNiche").value.trim(),competitors:list($("#ceComp").value),keywords:list($("#ceKw").value),...(window.extraCh?window.extraCh():{}),updated:now()});
     $("#chEdit").hidden=true;say("Channel saved.","good")}catch(err){say("Couldn't save the channel: "+(err&&err.message||"try again"),"err")}});
 async function scanJob(mode){
   const ch=scanCh(), c=channels.find(x=>x.id===ch)||{};
@@ -808,6 +836,95 @@ document.addEventListener("click",async e=>{
   const b=e.target.closest("button[data-chain]"); if(!b||!db) return;
   const chain=CHAINS[b.dataset.chain]; b.disabled=true;
   try{await queue(chain[0],{then:chain.slice(1),chain:b.dataset.chain})}catch(err){say("Couldn't start autopilot: "+(err&&err.message||""),"err")}
+});
+renderAll();
+</script>
+
+<script>
+// ===== Episode numbers, outdated steps, idea score, channel profiles, Package lab, growth (2026-11-03d) =====
+// --- automatic episode numbers: next number in the channel, keeping its prefix (e.g. 002, s002)
+function nextEp(ch){
+  const eps=allVideos.filter(v=>(v.channel||"business-docs")===ch&&v.ep).map(v=>String(v.ep));
+  let pre="",max=0; eps.forEach(e=>{const m=/^(\D*)(\d+)$/.exec(e);if(m&&+m[2]>=max){max=+m[2];pre=m[1]}});
+  return pre+String(max+1).padStart(3,"0");
+}
+addIdea=async function(refUrl,note){
+  const ch=cur==="all"?($("#chPick").value||"business-docs"):cur, ep=nextEp(ch);
+  await db.collection("videos").add({channel:ch,ep,title:note||"New idea from reference",stage:"idea",refUrl,formula:"",next:"Run Autopilot on the Idea lane (brief + score)",created:Date.now(),updated:Date.now()});
+  say(`Added as EP ${ep}.`,"good");
+};
+let _epFixed=false;
+async function fixMissingEps(){ if(_epFixed||!db||!allVideos.length) return; _epFixed=true;
+  for(const v of allVideos.filter(v=>!v.ep&&v.stage!=="live")){const ep=nextEp(v.channel||"business-docs");v.ep=ep;await db.collection("videos").doc(v.id).update({ep})}
+}
+// --- Idea lane autopilot + score + package steps
+CHAINS.Idea=["claude_idea","claude_score"];
+LANES.find(l=>l.name==="Idea").steps.push(["claude_score","Score the idea (6 factors)",1]);
+LANES.find(l=>l.name==="Render").steps.push(["claude_package","10 titles + 10 thumbnails",1]);
+STOPS.Idea="Stops for you to pick the idea.";
+// --- outdated steps
+const ART2STEP={claims:"claude_factcheck",narration:"narration",voice:"finalize",words:"align",beats:"beatsheet",draft:"draft",final:"final"};
+const STEP2ART=Object.fromEntries(Object.entries(ART2STEP).map(([a,s])=>[s,a]));STEP2ART.voice="voice";
+const REBUILD=["narration","voice","finalize","align","beatsheet","draft","qc"];
+function staleInfo(v){const a=(v&&v.sync&&v.sync.arts)||{};return Object.entries(a).filter(([k,x])=>x.stale).map(([k,x])=>({art:k,by:x.stale}))}
+const _stepRow=stepRow;
+stepRow=function(v,st){let h=_stepRow(v,st);const art=STEP2ART[st[0]],a=v&&v.sync&&v.sync.arts&&v.sync.arts[art];
+  if(a&&a.stale) h=h.replace('<span class="st','<span class="st stale">⚠ outdated — '+esc(a.stale)+' changed after it</span><span class="st');return h};
+const _tabRun3=tabRun;
+tabRun=function(v){const st=staleInfo(v);if(!st.length) return _tabRun3(v);
+  const first=Math.min(...st.map(x=>{const s=ART2STEP[x.art];const i=REBUILD.indexOf(s==="finalize"?"voice":s);return i<0?99:i}));
+  const chain=first<99?REBUILD.slice(first):[];const fc=st.some(x=>x.art==="claims");
+  return `<div class="banner2"><span><b>${st.length} step${st.length>1?"s are":" is"} outdated</b> — ${st.map(x=>`${esc(x.art)} (since ${esc(x.by)} changed)`).join(", ")}${fc?". Fact-check is outdated too — run it from the Script lane.":""}</span>
+    ${chain.length?`<button class="gold" data-rebuild="${chain.join(",")}">Rebuild outdated: ${chain.join(" → ")}</button>`:""}</div>`+_tabRun3(v)};
+// --- idea score on cards + hero
+const scoreChip=v=>{const sc=v.sync&&v.sync.score;return sc?`<span class="score ${esc(sc.verdict||"")}" title="${esc(Object.entries(sc.scores||{}).map(([k,n])=>k+" "+n).join(" · "))}${sc.risks?" · Risk: "+esc(sc.risks):""}">Score ${esc(sc.total)}/60 · ${esc(sc.verdict||"")}</span>`:""};
+const _card=card; card=v=>_card(v).replace("<h4>",scoreChip(v)+"<h4>");
+// --- channel profile fields
+const _openEdit=openEdit;
+openEdit=function(){_openEdit();const c=channels.find(x=>x.id===cur)||{},vo=c.voice||{};
+  $("#ceEng").value=vo.engine||"chatterbox";$("#ceKv").value=vo.kokoro_voice||"";$("#cePace").value=vo.pace_atempo??"";$("#ceEx").value=vo.exaggeration??"";$("#ceCfg").value=vo.cfg_weight??"";$("#ceSeed").value=vo.seed??"";$("#ceStyle").value=c.style||""};
+window.extraCh=()=>{const num=x=>{const n=parseFloat($(x).value);return isNaN(n)?undefined:n};
+  return {voice:JSON.parse(JSON.stringify({engine:$("#ceEng").value,kokoro_voice:$("#ceKv").value.trim()||undefined,pace_atempo:num("#cePace"),exaggeration:num("#ceEx"),cfg_weight:num("#ceCfg"),seed:num("#ceSeed")})),style:$("#ceStyle").value.trim()}};
+// --- Package lab
+const _renderProd2=renderProd;
+renderProd=function(){
+  _renderProd2();
+  const t=$("#ptabs");if(t&&!t.querySelector('[data-ptab="package"]'))t.querySelector('[data-ptab="files"]').insertAdjacentHTML("beforebegin",`<button data-ptab="package" aria-pressed="${ptab==="package"}">Package</button>`);
+  if(ptab==="package"&&!(document.activeElement&&document.activeElement.matches("#pbody input[type=text]"))){const v=selVideo();$("#pbody").innerHTML=v?tabPackage(v):`<p class="note">Add an idea first.</p>`;
+    t.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ptab==="package"))}
+  fixMissingEps();
+};
+function thumb(x){return `<div class="th ${esc(x.layout||"left-subject")}" style="background:linear-gradient(120deg,${esc(x.bg||"#222")},${esc(x.bg||"#222")} 55%,${esc(x.accent||"#c90")})"><span class="tx" style="color:#fff">${esc(x.text||"")}</span><span class="sb">${esc(x.subject||"")}</span></div>`}
+function tabPackage(v){
+  const pk=v.sync&&v.sync.package, pick=v.pkgPicks||{titles:[],thumbs:[]};
+  const j=lastJob(v.id,"claude_package");
+  const head=`<div class="prod-h"><p class="note">Claude writes 10 titles and 10 thumbnail ideas from the script. Pick 3 of each — they pair up in order as your 3 Test & Compare combos.</p>
+    <button class="gold" data-run="claude_package" ${j&&["queued","running"].includes(j.status)?"disabled":""}>${pk?"Regenerate":"Generate"} 10 + 10 · Claude</button></div>`;
+  if(!pk) return head+`<p class="note">${j?"Last run: "+esc(j.status)+(j.error?" — "+esc(j.error):""):"Needs a script for this episode first."}</p>`;
+  const T=pk.titles||[],H=pk.thumbs||[];
+  const combos=[0,1,2].map(i=>({t:T[pick.titles[i]],h:H[pick.thumbs[i]]})).filter(c=>c.t||c.h);
+  const ch=channels.find(c=>c.id===(v.channel||"business-docs"))||{};
+  return head+`<div class="pk"><div><h4>Titles · ${pick.titles.length}/3 picked</h4><div class="pkl">${T.map((x,i)=>`<label class="pki ${pick.titles.includes(i)?"on":""}"><input type="checkbox" data-pk="titles" data-i="${i}" ${pick.titles.includes(i)?"checked":""}><span><b>${esc(x.t)}</b><small>${esc(x.formula||"")} · ${esc(x.score??"")}/10 · ${esc(x.why||"")} · ${String(x.t||"").length} chars</small></span></label>`).join("")}</div>
+    <h4 style="margin-top:14px">Thumbnails · ${pick.thumbs.length}/3 picked</h4><div class="thgrid">${H.map((x,i)=>`<label class="pki ${pick.thumbs.includes(i)?"on":""}"><input type="checkbox" data-pk="thumbs" data-i="${i}" ${pick.thumbs.includes(i)?"checked":""} class="sr">${thumb(x)}<small>${esc(x.why||"")}</small></label>`).join("")}</div></div>
+    <div><h4>Phone preview</h4><div class="phone">${(combos.length?combos:[{t:T[0],h:H[0]}]).map(c=>`<div class="yt">${thumb(c.h||{})}<div class="tt"><span class="av"></span><span><b>${esc(c.t?c.t.t:"(pick a title)")}</b><small>${esc(ch.name||"Your channel")} · 0 views · just now</small></span></div></div>`).join("")}
+      <div class="srch">${thumb((combos[0]||{}).h||H[0]||{})}<span><b>${esc(((combos[0]||{}).t||T[0]||{}).t||"")}</b><br><small>Search-result size</small></span></div></div>
+    <p class="note" style="margin-top:8px">Text you can't read at this size won't work on a phone. Test & Compare runs after the video is public.</p></div></div>`;
+}
+// --- swipe: growth per day + sort
+const _renderSwipe2=renderSwipe;
+renderSwipe=function(){_renderSwipe2();const sel=$("#swSort");if(sel&&!sel.querySelector('[value=growth]'))sel.insertAdjacentHTML("beforeend",`<option value="growth">Sort: fastest growing</option>`);
+  if(swSort==="growth"){const list=[...swipe].filter(o=>(filter==="All"||o.formula===filter)&&(o.multiple||0)>=swMin).sort((a,b)=>(b.perDay||0)-(a.perDay||0));
+    const cards=[...$("#swipe").children];const byId={};cards.forEach(c=>{const b=c.querySelector("[data-use]");if(b)byId[b.dataset.use]=c});$("#swipe").replaceChildren(...list.map(o=>byId[o.id]).filter(Boolean))}
+  swipe.forEach(o=>{if(!o.perDay)return;const c=[...$("#swipe").children].find(c=>c.querySelector(`[data-use="${CSS.escape(o.id)}"]`));const m=c&&c.querySelector(".meta");if(m&&!m.dataset.g){m.dataset.g=1;m.insertAdjacentHTML("beforeend",` · <b style="color:var(--ok)">+${fmtN(o.perDay)}/day</b>`)}})};
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b||!db) return;
+  if(b.dataset.rebuild){const c=b.dataset.rebuild.split(",");b.disabled=true;await queue(c[0],{then:c.slice(1),chain:"Rebuild"})}
+});
+document.addEventListener("change",async e=>{
+  const t=e.target; if(!t.dataset.pk||!db) return; const v=selVideo(); if(!v) return;
+  const p={titles:[...((v.pkgPicks||{}).titles||[])],thumbs:[...((v.pkgPicks||{}).thumbs||[])]}, k=t.dataset.pk, i=+t.dataset.i;
+  if(t.checked){if(p[k].length>=3){t.checked=false;say("Pick at most 3 — untick one first.","err");return}p[k].push(i)} else p[k]=p[k].filter(x=>x!==i);
+  v.pkgPicks=p; renderProd(); await db.collection("videos").doc(v.id).update({pkgPicks:p,updated:now()});
 });
 renderAll();
 </script>
