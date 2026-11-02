@@ -195,6 +195,20 @@ input::placeholder{color:var(--ink-3)}
 .ask{display:grid;grid-template-columns:1fr auto;gap:8px}
 .ask input{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 12px}
 .note{font-size:13px;color:var(--ink-3);margin:0}
+
+/* 2026-11-03b: channel edit, swipe scanner, publish gate */
+.newch textarea,.newch input{font:inherit}
+.chedit{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:16px;align-items:end}
+.chedit input{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 12px;width:100%}
+.chedit .wide{grid-column:1/-1}
+.swtools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;margin-bottom:10px}
+.swtools input{flex:1 1 240px}.swtools select{flex:0 1 170px}.swstat{flex-basis:100%}
+.swtools input,.swtools select{font:inherit;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px;min-width:0;width:100%}
+.swstat{font-size:13px;color:var(--ink-3)}
+.sw img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;display:block;background:var(--raise)}
+.sw .meta{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.sw .row2{display:flex;gap:6px;flex-wrap:wrap}
+.sw .row2 button{min-height:36px;font-size:13px}
 </style>
 </head><body>
 
@@ -234,6 +248,17 @@ input::placeholder{color:var(--ink-3)}
     <button class="gold" type="submit">Create channel</button>
   </form>
 
+
+  <form class="panel chedit" id="chEdit" hidden autocomplete="off">
+    <div class="field"><label for="ceName">Channel name</label><input id="ceName" required></div>
+    <div class="field"><label for="ceLen">Length target</label><input id="ceLen"></div>
+    <div class="field"><label for="ceCad">Cadence</label><input id="ceCad"></div>
+    <div class="field wide"><label for="ceNiche">Niche</label><input id="ceNiche"></div>
+    <div class="field wide"><label for="ceComp">Competitor channels for scans (comma separated, e.g. @MagnatesMedia, @JakeTran)</label><input id="ceComp"></div>
+    <div class="field wide"><label for="ceKw">Niche keywords to scan (comma separated)</label><input id="ceKw" placeholder="e.g. family dynasty documentary, company collapse"></div>
+    <div class="row"><button class="gold" type="submit">Save channel</button> <button type="button" data-cecancel="1">Cancel</button></div>
+    <p class="msg">The folder name (<span id="ceId"></span>) stays the same, so nothing on the laptop breaks.</p>
+  </form>
   <form class="panel add" id="signin" hidden autocomplete="on">
     <div class="field"><label for="email">Board passcode (asked once on this device)</label>
     <input id="email" type="password" autocomplete="current-password" placeholder="passcode" required></div>
@@ -278,6 +303,17 @@ input::placeholder{color:var(--ink-3)}
 
   <section aria-labelledby="swipe-h">
     <div class="sh"><h3 id="swipe-h">Swipe file</h3><p>Videos that beat their own channel's median views. Pick one as the pattern for your next idea.</p></div>
+    <form class="panel swtools" id="swTools" autocomplete="off">
+      <button type="button" class="gold" data-scan="competitors">Scan competitors</button>
+      <input id="swQ" placeholder="Niche keyword, e.g. corporate scandal documentary" aria-label="Niche keyword">
+      <button type="button" data-scan="search">Scan niche</button>
+      <input id="swUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube link to add">
+      <button type="button" data-scan="url">Add video</button>
+      <button type="button" data-scan="tag" title="Claude names the title formula for untagged outliers (uses Claude usage)">Tag formulas · Claude</button>
+      <select id="swMin" aria-label="Minimum multiple"><option value="0">Any multiple</option><option value="3">3× and up</option><option value="5">5× and up</option><option value="10">10× and up</option></select>
+      <select id="swSort" aria-label="Sort"><option value="multiple">Sort: multiple</option><option value="views">Sort: views</option><option value="new">Sort: newest found</option></select>
+      <div class="swstat" id="swStat"></div>
+    </form>
     <div class="filters" id="filters" role="group" aria-label="Filter by formula"></div>
     <div class="swipe" id="swipe"></div>
   </section>
@@ -664,6 +700,81 @@ document.addEventListener("submit",async e=>{
   db.collection("runner").onSnapshot(s=>{const d=s.docs.find(x=>x.id==="laptop");runner=d?d.data():{};renderAll()});
   setInterval(()=>{if(!document.hidden){window._yfReload?.jobs?.();window._yfReload?.runner?.();const busy=activeJob();if(busy||Math.random()<.25)window._yfReload?.videos?.()}},4000);
 })();
+</script>
+
+<script>
+// ===== Channel edit + swipe scanner + publish gate (2026-11-03b) =====
+const PUBLISH=[["facts","Fact audit: every date, number, quote and causal claim has a source"],["rights","Copyright audit: each asset's actual licence + attribution checked"],["hook","Narrative audit: first 60 s sets a strong question; every section moves the story"],["visual","Visual audit: no long static stretches, generic stock or filler AI images"],["audio","Audio audit: name pronunciations, music level, no clipping or dead air"],["tech","Technical audit: full watch-through at 1440p, sync, captions, no glitches"],["pack","Packaging: 3 title + thumbnail combos, description, chapters, sources"],["human","Owner watched the entire final render"],["original","Originality: own research, analysis, narrative and look"],["private","Uploaded private: copyright check clear, metadata + thumbnail right"]];
+const _canAdv2=canAdv;
+canAdv=v=>_canAdv2(v)&&(v.stage!=="ready"||PUBLISH.every(([k])=>(v.publish||{})[k]));
+const _tabChecks=tabChecks;
+tabChecks=function(v){
+  const p=v.publish||{}, n=PUBLISH.filter(([k])=>p[k]).length;
+  return _tabChecks(v)+`<h4 style="margin:18px 0 8px">Publish gate · ${n}/10 <small class="note">(locks Ready → Live)</small></h4><div class="chk">${PUBLISH.map(([k,t])=>`<label class="ck ${p[k]?"ok":""}" style="cursor:pointer"><input type="checkbox" data-pub="${k}" ${p[k]?"checked":""}><div><b>${esc(t.split(":")[0])}</b><small>${esc(t.split(":").slice(1).join(":"))}</small></div></label>`).join("")}</div>`;
+};
+let swMin=0, swSort="multiple";
+const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"K":String(n||0);
+const scanCh=()=>cur==="all"?($("#chPick").value||"business-docs"):cur;
+renderSwipe=function(){
+  if(!db){$("#filters").innerHTML="";$("#swipe").innerHTML=`<div class="empty">Unlock the board to see the swipe file.</div>`;$("#swStat").textContent="";return}
+  const last=jobs.filter(j=>["scan","tag"].includes(j.step)&&(cur==="all"||j.channel===cur)).sort((a,b)=>(b.created||0)-(a.created||0))[0];
+  $("#swStat").innerHTML=(last?`Last: <a href="#" data-showjob="${esc(last.id)}">${esc(last.label||last.step)} — ${esc(last.status)}${last.status==="running"&&last.progress!=null?" "+last.progress+"%":""}${last.ended?" · "+ago(last.ended):""}</a>${last.error?" · "+esc(last.error):""}`:"No scans yet.")+(online()?"":" · Laptop runner is offline — scans run when it starts.");
+  const forms=["All",...new Set(swipe.map(o=>o.formula).filter(Boolean))];
+  $("#filters").innerHTML=forms.map(f=>`<button data-filter="${esc(f)}" aria-pressed="${f===filter}">${esc(f)} ${f==="All"?swipe.length:swipe.filter(o=>o.formula===f).length}</button>`).join("");
+  let list=swipe.filter(o=>(filter==="All"||o.formula===filter)&&(o.multiple||0)>=swMin);
+  list.sort(swSort==="views"?(a,b)=>(b.views||0)-(a.views||0):swSort==="new"?(a,b)=>(b.scanned||0)-(a.scanned||0):(a,b)=>(b.multiple||0)-(a.multiple||0));
+  if(!list.length){$("#swipe").innerHTML=`<div class="empty">${swipe.length?"Nothing matches these filters.":"No outliers yet. Press Scan competitors or scan a niche keyword."}</div>`;return}
+  const mx=Math.max(...list.map(o=>o.multiple||0),1);
+  $("#swipe").innerHTML=list.slice(0,120).map(o=>{const url=safeUrl(o.url),m=Number(o.multiple||0),th=safeUrl(o.thumb)||(url&&/youtu\.be\/([\w-]{11})/.exec(url)?`https://i.ytimg.com/vi/${/youtu\.be\/([\w-]{11})/.exec(url)[1]}/mqdefault.jpg`:"");
+    return `<article class="panel sw">${th?`<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(th)}" alt="" loading="lazy"></a>`:""}
+      <div class="mult"><b>${m.toFixed(1)}×</b><span class="track" aria-hidden="true"><i style="width:${m/mx*100}%"></i></span></div>
+      <h4>${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(o.title)}</a>`:esc(o.title)}</h4>
+      <div class="by">${esc(o.ytChannel||"")}</div>
+      ${o.views?`<div class="meta">${fmtN(o.views)} views · channel median ${fmtN(o.median)}${o.source?" · "+esc(o.source):""}</div>`:""}
+      ${o.formula?`<span class="chip">${esc(o.formula)}</span>`:""}
+      <div class="row2"><button data-use="${esc(o.id)}">${ic("i-plus")}Use as reference</button><button class="ghost" data-swdel="${esc(o.id)}" aria-label="Remove from swipe file">${ic("i-trash")}</button></div>
+    </article>`}).join("");
+};
+// "Edit channel" button on each channel tab
+const _renderTabs=renderTabs;
+renderTabs=function(){_renderTabs();if(cur!=="all"&&!document.querySelector("[data-editch]"))$("#tabs").insertAdjacentHTML("beforeend",`<button data-editch="1">${ic("i-pen")}Edit channel</button>`)};
+function openEdit(){const c=channels.find(x=>x.id===cur);if(!c)return;const f=$("#chEdit");
+  $("#ceId").textContent=c.id;$("#ceName").value=c.name||"";$("#ceLen").value=c.length||"";$("#ceCad").value=c.cadence||"";$("#ceNiche").value=c.niche||"";
+  $("#ceComp").value=(c.competitors||[]).join(", ");$("#ceKw").value=(c.keywords||[]).join(", ");f.hidden=false;$("#ceName").focus()}
+const list=s=>s.split(",").map(x=>x.trim()).filter(Boolean);
+$("#chEdit").addEventListener("submit",async e=>{e.preventDefault();if(!db)return;
+  const name=$("#ceName").value.trim();if(!name)return;
+  try{await db.collection("channels").doc(cur).update({name,length:$("#ceLen").value.trim(),cadence:$("#ceCad").value.trim(),niche:$("#ceNiche").value.trim(),competitors:list($("#ceComp").value),keywords:list($("#ceKw").value),updated:now()});
+    $("#chEdit").hidden=true;say("Channel saved.","good")}catch(err){say("Couldn't save the channel: "+(err&&err.message||"try again"),"err")}});
+async function scanJob(mode){
+  const ch=scanCh(), c=channels.find(x=>x.id===ch)||{};
+  if(mode==="tag") return queueSwipe("tag",ch,{});
+  if(mode==="competitors"){if(!(c.competitors||[]).length&&ch!=="business-docs"){say("Add competitor channels first: Edit channel.","err");return} return queueSwipe("scan",ch,{mode,handles:c.competitors||[]})}
+  if(mode==="search"){const q=$("#swQ").value.trim()||(c.keywords||[])[0];if(!q){$("#swQ").focus();return} $("#swQ").value="";return queueSwipe("scan",ch,{mode,q})}
+  if(mode==="url"){const u=$("#swUrl").value.trim();if(!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(u)){$("#swUrl").focus();return} $("#swUrl").value="";return queueSwipe("scan",ch,{mode,url:u})}
+}
+async function queueSwipe(step,ch,args){
+  const id="j"+now().toString(36)+Math.random().toString(36).slice(2,5);
+  await db.collection("jobs").doc(id).set({step,video:"",channel:ch,ep:"",args,status:"queued",created:now(),by:"board"});window._yfReload?.jobs?.();
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.editch){openEdit();return}
+  if(b.dataset.cecancel){$("#chEdit").hidden=true;return}
+  if(!db) return;
+  try{
+    if(b.dataset.scan){b.disabled=true;await scanJob(b.dataset.scan);setTimeout(()=>b.disabled=false,1500)}
+    else if(b.dataset.swdel){await db.collection("swipe").doc(b.dataset.swdel).delete()}
+  }catch(err){say("Couldn't queue that: "+(err&&err.message||"try again"),"err")}
+});
+document.addEventListener("change",async e=>{
+  const t=e.target;
+  if(t.id==="swMin"){swMin=Number(t.value);renderSwipe();return}
+  if(t.id==="swSort"){swSort=t.value;renderSwipe();return}
+  if(t.dataset.pub){const v=selVideo();if(!v||!db)return;await db.collection("videos").doc(v.id).update({publish:{...(v.publish||{}),[t.dataset.pub]:t.checked},updated:now()})}
+});
+$("#swTools").addEventListener("submit",e=>e.preventDefault());
+renderAll();
 </script>
 
 </body></html>
