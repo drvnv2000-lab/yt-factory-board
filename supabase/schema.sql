@@ -45,3 +45,17 @@ do $$ declare t text; begin
   end loop;
 end $$;
 create index if not exists jobs_status on public.jobs ((data->>'status'));
+
+-- 2026-11-04: atomic merge (fixes lost updates between board and laptop). Runs with the caller's rights, so the key_all RLS
+-- policies (passcode header) still decide access. Top-level keys in patch replace the stored ones; other keys are untouched.
+create or replace function public.merge_doc(t text, doc_id text, patch jsonb) returns jsonb language plpgsql security invoker set search_path = public as $$
+declare out jsonb;
+begin
+  if t not in ('channels','videos','swipe','jobs','runner') then raise exception 'bad table %', t; end if;
+  execute format('insert into public.%I as d (id, data, updated_at) values ($1, $2, now())
+                  on conflict (id) do update set data = d.data || excluded.data, updated_at = now() returning d.data', t)
+    into out using doc_id, patch;
+  return out;
+end $$;
+revoke all on function public.merge_doc(text, text, jsonb) from public;
+grant execute on function public.merge_doc(text, text, jsonb) to anon, authenticated;

@@ -349,7 +349,7 @@ body.settled .card,body.settled .sw{animation:none}
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <script>
 // Supabase adapter: same collection/doc API the board used before. Tables: channels, videos, swipe (id text, data jsonb).
 const KEY=(()=>{try{return localStorage.getItem("yfKey")||""}catch(e){return ""}})();
@@ -357,7 +357,7 @@ const SB=supabase.createClient("https://ktygzmskutyltgsotbcf.supabase.co","sb_pu
 function makeDb(){
   const coll=(name)=>({
     onSnapshot(cb,err){
-      const load=async()=>{const {data,error}=await SB.from(name).select("id,data");
+      const load=async()=>{let q=SB.from(name).select("id,data"); if(name==="jobs") q=q.order("updated_at",{ascending:false}).limit(300); const {data,error}=await q;
         if(error){err&&err(error);return}
         const js=JSON.stringify(data); if(js===(coll._last=coll._last||{})[name]) return; coll._last[name]=js; cb({docs:data.map(r=>({id:r.id,data:()=>r.data||{}}))})};
       load(); SB.channel("rt-"+name).on("postgres_changes",{event:"*",schema:"public",table:name},load).subscribe();
@@ -365,7 +365,10 @@ function makeDb(){
     },
     doc(id){return {
       async set(obj){const {error}=await SB.from(name).upsert({id,data:obj});if(error)throw error;coll._reload?.[name]?.()},
-      async update(patch){const {data:r}=await SB.from(name).select("data").eq("id",id).single();
+      async update(patch){
+        if(window._yfMerge!==false){const {error}=await SB.rpc("merge_doc",{t:name,doc_id:id,patch});
+          if(!error){coll._reload?.[name]?.();return} if(!/merge_doc|PGRST202|function/i.test((error.message||"")+(error.code||"")))throw error; window._yfMerge=false}
+        const {data:r}=await SB.from(name).select("data").eq("id",id).single();   // fallback until merge_doc is installed (supabase/schema.sql)
         const {error}=await SB.from(name).upsert({id,data:{...(r?.data||{}),...patch}});if(error)throw error;coll._reload?.[name]?.()},
       async delete(){const {error}=await SB.from(name).delete().eq("id",id);if(error)throw error;coll._reload?.[name]?.()}
     }},
@@ -1167,10 +1170,13 @@ const _ra5=renderAll; renderAll=function(){_ra5(); if(["comp","jobs","radar"].in
 // ---------- free YouTube autocomplete (JSONP; demand signal, NOT search volume)
 const acCache={};
 function suggest(q){ if(acCache[q]) return Promise.resolve(acCache[q]);
-  return new Promise(res=>{const cb="yfac"+Math.random().toString(36).slice(2);const s=document.createElement("script");
-    const done=v=>{delete window[cb];s.remove();res(v)}; const t=setTimeout(()=>done([]),6000);
-    window[cb]=d=>{clearTimeout(t);const v=((d&&d[1])||[]).map(x=>Array.isArray(x)?x[0]:x);acCache[q]=v;done(v)};
-    s.src=`https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=en&q=${encodeURIComponent(q)}&callback=${cb}`; s.onerror=()=>{clearTimeout(t);done([])}; document.head.appendChild(s)})}
+  // Google's JSONP runs inside a sandboxed iframe (opaque origin), so it can't read this page or the passcode.
+  return new Promise(res=>{const f=document.createElement("iframe"),tag="ac"+Math.random().toString(36).slice(2);f.sandbox="allow-scripts";f.style.display="none";
+    let t; const on=e=>{if(e.source===f.contentWindow&&e.data&&e.data.tag===tag)done((e.data.v||[]).filter(x=>typeof x==="string").slice(0,20))};
+    const done=v=>{clearTimeout(t);window.removeEventListener("message",on);f.remove();if(v.length)acCache[q]=v;res(v)}; t=setTimeout(()=>done([]),7000);
+    window.addEventListener("message",on);
+    f.srcdoc=`<script>function cb(d){parent.postMessage({tag:${JSON.stringify(tag)},v:((d&&d[1])||[]).map(function(x){return Array.isArray(x)?x[0]:x})},"*")}<\/script><script src="https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=en&q=${encodeURIComponent(q)}&callback=cb" onerror="cb([])"><\/script>`;
+    document.body.appendChild(f)})}
 async function explore(seed){
   const base=await suggest(seed), out=new Map(); base.forEach((x,i)=>out.set(x,{q:x,top:true,rank:i}));
   const pre=["", ..."abcdefghijklmnopqrstuvwxyz".split("")].slice(1).map(c=>seed+" "+c).concat(["how "+seed,"why "+seed,seed+" "+({documentary:"documentary",explainer:"explained",tutorial:"tutorial","kids/cartoon":"for kids","list/countdown":"top 10"}[chDoc().format||"documentary"]||"")]);
@@ -1313,7 +1319,7 @@ const _renderJobs6=renderJobs;
 renderJobs=function(){_renderJobs6();const el=$("#vJobs");if(!el)return;
   el.querySelector(".sh")?.insertAdjacentHTML("afterend",`<div class="panel" style="padding:12px 14px;box-shadow:none"><h4>YouTube API key <small class="note">optional · free</small></h4>
     <p class="note">${runner.ytKey?`<b style="color:var(--ok)">Set and working</b> — scans use the API (faster, fewer blocks), yt-dlp stays as backup.`:"Not set — scans use yt-dlp only."}${runner.ytKeyMsg&&runner.ytKeyAt?" Last change: "+esc(runner.ytKeyMsg)+" "+esc(ago(runner.ytKeyAt))+".":""}${runner.ytKeyNew?" Handing the key to the laptop…":""}</p>
-    <ol class="note" style="margin:6px 0 10px 18px"><li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Open YouTube Data API v3</a> → pick or create a project → <b>Enable</b>.</li><li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → <b>Create credentials → API key</b> → copy it (optional: restrict it to YouTube Data API v3).</li><li>Paste it below. The laptop tests it, saves it in shared\\runner\\.yt_key and wipes it from the board.</li></ol>
+    <ol class="note" style="margin:6px 0 10px 18px"><li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Open YouTube Data API v3</a> → pick or create a project → <b>Enable</b>.</li><li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → <b>Create credentials → API key</b> → copy it (optional: restrict it to YouTube Data API v3).</li><li>Paste it below. It passes through the board once; the laptop tests it, saves it in shared\\runner\\.yt_key and wipes it from the board.</li></ol>
     <form class="bar2" id="ytKeyForm" autocomplete="off"><input type="password" id="ytKeyIn" placeholder="Paste API key" autocomplete="off"><button class="gold" type="submit">Send to laptop</button>${runner.ytKey?`<button type="button" data-ytkeydel="1">Remove key</button>`:""}</form></div>`)};
 // ---------- events
 document.addEventListener("click",e=>{
