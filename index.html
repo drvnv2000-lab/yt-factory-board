@@ -1143,15 +1143,15 @@ renderAll();
 <script>
 /* ===== v5 (2026-11-04): left sidebar + research studio (keywords & gaps, competitors, title/SEO lab, jobs). Sidebar only shows/hides existing sections — no DOM moves. ===== */
 (function(){
-const VIEWS={home:[".slate","#addForm","section[aria-labelledby=pipe-h]","#parked"],desk:["#prod"],outliers:["section[aria-labelledby=swipe-h]"],kw:["#vKw"],comp:["#vComp"],seo:["#vSeo"],jobs:["#vJobs"]};
+const VIEWS={home:[".slate","#addForm","section[aria-labelledby=pipe-h]","#parked"],desk:["#prod"],outliers:["section[aria-labelledby=swipe-h]"],kw:["#vKw"],radar:["#vRadar"],comp:["#vComp"],seo:["#vSeo"],jobs:["#vJobs"]};
 const NAV=[["Workspace",[["home","i-flag","Pipeline"],["desk","i-clap","Production desk"]]],
-  ["Research",[["outliers","i-bulb","Outlier finder"],["kw","i-link","Keywords & gaps"],["comp","i-film","Competitors"]]],
+  ["Research",[["outliers","i-bulb","Outlier finder"],["radar","i-arrow","Viral radar"],["kw","i-link","Keywords & gaps"],["comp","i-film","Competitors"]]],
   ["Packaging",[["seo","i-pen","Title & SEO lab"]]],
   ["Channel",[["settings","i-check","Channel settings"],["analytics","i-play","Analytics",1]]],
   ["System",[["jobs","i-clock","Jobs & laptop"]]]];
 let view=(()=>{try{return localStorage.getItem("yf-view")||"home"}catch(e){return "home"}})(); if(!VIEWS[view]) view="home";
 const wrap=document.querySelector(".wrap");
-wrap.insertAdjacentHTML("beforeend",`<section class="panel tool" id="vKw"></section><section class="panel tool" id="vComp"></section><section class="panel tool" id="vSeo"></section><section class="panel tool" id="vJobs"></section>`);
+wrap.insertAdjacentHTML("beforeend",`<section class="panel tool" id="vKw"></section><section class="panel tool" id="vRadar"></section><section class="panel tool" id="vComp"></section><section class="panel tool" id="vSeo"></section><section class="panel tool" id="vJobs"></section>`);
 document.body.insertAdjacentHTML("afterbegin",`<aside id="side" aria-label="Sections">${NAV.map(([g,items])=>`<div class="sg">${g}</div>`+items.map(([k,icon,l,later])=>`<button data-view="${k}" title="${l}${later?" — after launch":""}" ${later?"disabled":""}>${ic(icon)}<span class="lbl">${l}</span>${later?'<span class="later">after launch</span>':""}</button>`).join("")).join("")}
   <button class="col" data-sidecol="1" title="Collapse sidebar">${ic("i-left")}<span class="lbl">Collapse</span></button></aside>`);
 try{if(localStorage.getItem("yf-sidecol")==="1")document.body.classList.add("sidecol")}catch(e){}
@@ -1160,8 +1160,8 @@ window.setView=function(v){view=v;try{localStorage.setItem("yf-view",v)}catch(e)
   document.querySelectorAll("#side [data-view]").forEach(b=>b.setAttribute("aria-current",b.dataset.view===v?"page":"false"));
   renderTool(); window.scrollTo({top:0});
 };
-function renderTool(){ if(view==="kw")renderKw(); else if(view==="comp")renderComp(); else if(view==="seo")renderSeo(); else if(view==="jobs")renderJobs(); }
-const _ra5=renderAll; renderAll=function(){_ra5(); if(["comp","jobs"].includes(view)&&!(document.activeElement&&document.activeElement.closest(".tool"))) renderTool(); else if(view==="kw") renderKwList()};
+function renderTool(){ if(view==="kw")renderKw(); else if(view==="comp")renderComp(); else if(view==="radar")renderRadar(); else if(view==="seo")renderSeo(); else if(view==="jobs")renderJobs(); }
+const _ra5=renderAll; renderAll=function(){_ra5(); if(["comp","jobs","radar"].includes(view)&&!(document.activeElement&&document.activeElement.closest(".tool"))) renderTool(); else if(view==="kw") renderKwList()};
 
 // ---------- free YouTube autocomplete (JSONP; demand signal, NOT search volume)
 const acCache={};
@@ -1259,6 +1259,40 @@ function renderJobs(){
    <div class="tscroll"><table class="tbl"><thead><tr><th>When</th><th>Step</th><th>Video</th><th>Status</th><th>Took</th><th></th></tr></thead><tbody>
    ${L.map(j=>{const d=dur(j);return `<tr><td>${esc(ago(j.created))}</td><td>${esc(j.label||j.step)}<br><small class="note">${esc(j.by||"")}</small></td><td>${esc(vn(j.video))}</td><td class="s-${j.status==="done"?"verified":j.status==="failed"?"wrong":"unverified"}">${esc(j.status)}${j.error?`<br><small>${esc(j.error.slice(0,90))}</small>`:""}</td><td>${d?(d>=60?Math.round(d/60)+"m":d+"s"):"—"}</td><td><button data-joblog="${esc(j.id)}">Log</button></td></tr>`}).join("")}</tbody></table></div>`;
 }
+// ---------- Viral radar (last 24h / 7d / 30d)
+let radarWin=7*24;
+function renderRadar(){
+  const el=$("#vRadar"); if(!el) return; const c=chDoc(), r=c.radar||{}, it=(r.items||[]).filter(x=>x.ageH<=radarWin).sort((a,b)=>b.perDay-a.perDay);
+  const j=jobs.filter(x=>x.step==="scan"&&(x.args||{}).mode==="radar").sort((a,b)=>b.created-a.created)[0], busy=j&&["queued","running"].includes(j.status);
+  const age=h=>h<48?h+"h":Math.round(h/24)+"d";
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Viral radar</h3><p>New videos in your niche that are taking off right now: your competitors' latest uploads (compared with their usual views) plus fresh videos for your channel keywords. Runs daily on the laptop; free.</p></div>
+   <div class="bar2">${[[24,"24 hours"],[168,"7 days"],[720,"30 days"]].map(([h,l])=>`<button data-radarwin="${h}" aria-pressed="${radarWin===h}" ${radarWin===h?'class="gold"':""}>${l}</button>`).join("")}
+     <button data-radarrun="1" ${busy?"disabled":""}>${busy?"Scanning…":"Run radar now"}</button>
+     <span class="note">${r.at?`Updated ${esc(ago(r.at))} · ${r.api?"YouTube API":"yt-dlp"}`:"Never run"}${j&&j.status==="failed"?" · last run failed: "+esc(j.error||""):""}</span></div>
+   ${it.length?`<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>Video</th><th>Age</th><th>Views</th><th>Per day</th><th>Outlier</th><th></th></tr></thead><tbody>${it.map(x=>`<tr>
+     <td><img src="${esc(x.thumb||"")}" alt="" width="120" height="68" loading="lazy" style="border-radius:6px;display:block"></td>
+     <td><a href="${esc(safeUrl(x.url)||"#")}" target="_blank" rel="noopener"><b>${esc(x.t||"")}</b></a><br><small class="note">${esc(x.ch||"")}${x.subs?" · "+nfmt(x.subs)+" subs":""} · ${esc(x.src||"")}</small></td>
+     <td>${age(x.ageH)}</td><td>${nfmt(x.views)}</td><td><b>${nfmt(x.perDay)}</b></td>
+     <td>${x.mult?`<b>${x.mult}×</b> their median`:x.ratio?`${x.ratio}× subs`:"—"}</td>
+     <td><button data-radaruse="${esc(x.url)}">Use as reference</button></td></tr>`).join("")}</tbody></table></div>`:`<p class="note">${r.at?"Nothing published in this window yet — try 30 days.":"Press Run radar now (needs competitors or keywords in Channel settings)."}</p>`}`;
+}
+// ---------- competitor growth (daily snapshots)
+function growthHTML(c){
+  const g=c.growth||{}, hs=Object.keys(g); if(!hs.length) return `<p class="note">No growth history yet — the laptop takes one snapshot a day (or press Snapshot now).</p>`;
+  const delta=(h,days,i)=>{const a=h[h.length-1];const t=new Date(a[0]);t.setDate(t.getDate()-days);const b=[...h].reverse().find(r=>new Date(r[0])<=t);if(!b||a[i]==null||b[i]==null)return "—";const d=a[i]-b[i];return (d>=0?"+":"")+nfmt(d)};
+  return `<div class="tscroll"><table class="tbl"><thead><tr><th>Channel</th><th>Subscribers</th><th>7 days</th><th>30 days</th><th>Total views 7d</th><th>Uploads 30d</th><th>Days tracked</th></tr></thead><tbody>${hs.map(k=>{const x=g[k],h=x.h||[],a=h[h.length-1]||[];
+    return `<tr><td><b>${esc(x.name||k)}</b><br><small class="note">${esc(k)}</small></td><td>${nfmt(a[1])}</td><td>${delta(h,7,1)}</td><td>${delta(h,30,1)}</td><td>${delta(h,7,2)}</td><td>${delta(h,30,3)}</td><td>${h.length}</td></tr>`}).join("")}</tbody></table></div>`;
+}
+const _renderComp6=renderComp;
+renderComp=function(){_renderComp6();const el=$("#vComp");if(!el)return;const j=jobs.filter(x=>x.step==="scan"&&(x.args||{}).mode==="growth").sort((a,b)=>b.created-a.created)[0];
+  el.querySelector(".bar2")?.insertAdjacentHTML("afterend",`<div><h4>Growth</h4>${growthHTML(chDoc())}<div class="bar2" style="margin-top:8px"><button data-growthrun="1" ${j&&["queued","running"].includes(j.status)?"disabled":""}>Snapshot now (free)</button><span class="note">${j?"Last: "+esc(j.status)+" "+esc(ago(j.ended||j.created))+(j.error?" — "+esc(j.error):""):""}</span></div></div><h4>Outliers by channel</h4>`)};
+// ---------- YouTube API key (optional; stored only on the laptop)
+const _renderJobs6=renderJobs;
+renderJobs=function(){_renderJobs6();const el=$("#vJobs");if(!el)return;
+  el.querySelector(".sh")?.insertAdjacentHTML("afterend",`<div class="panel" style="padding:12px 14px;box-shadow:none"><h4>YouTube API key <small class="note">optional · free</small></h4>
+    <p class="note">${runner.ytKey?`<b style="color:var(--ok)">Set and working</b> — scans use the API (faster, fewer blocks), yt-dlp stays as backup.`:"Not set — scans use yt-dlp only."}${runner.ytKeyMsg&&runner.ytKeyAt?" Last change: "+esc(runner.ytKeyMsg)+" "+esc(ago(runner.ytKeyAt))+".":""}${runner.ytKeyNew?" Handing the key to the laptop…":""}</p>
+    <ol class="note" style="margin:6px 0 10px 18px"><li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Open YouTube Data API v3</a> → pick or create a project → <b>Enable</b>.</li><li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → <b>Create credentials → API key</b> → copy it (optional: restrict it to YouTube Data API v3).</li><li>Paste it below. The laptop tests it, saves it in shared\\runner\\.yt_key and wipes it from the board.</li></ol>
+    <form class="bar2" id="ytKeyForm" autocomplete="off"><input type="password" id="ytKeyIn" placeholder="Paste API key" autocomplete="off"><button class="gold" type="submit">Send to laptop</button>${runner.ytKey?`<button type="button" data-ytkeydel="1">Remove key</button>`:""}</form></div>`)};
 // ---------- events
 document.addEventListener("click",e=>{
   const nv=e.target.closest("#side [data-view]"); if(nv){const k=nv.dataset.view; if(k==="settings"){setView("home");openEdit&&openEdit();setTimeout(()=>{const f=$("#chEdit");f&&f.scrollIntoView({behavior:"smooth"})},50)} else setView(k); return}
@@ -1273,13 +1307,21 @@ document.addEventListener("click",async e=>{
   const b=e.target.closest("button"); if(!b) return;
   if(b.dataset.joblog){showJob=b.dataset.joblog;const j=jobs.find(x=>x.id===showJob);if(j&&j.video){sel=j.video;try{localStorage.setItem("yf-sel",sel)}catch(x){}}ptab="run";ptabChosen=true;setView("desk");renderProd();document.querySelector(".live")?.scrollIntoView();return}
   if(b.dataset.compscan){const s=document.querySelector('[data-scan="competitors"]');if(s){s.click();say("Competitor scan queued — the laptop runs it now.","good")}setTimeout(renderComp,1500);return}
+  if(b.dataset.radarwin){radarWin=+b.dataset.radarwin;renderRadar();return}
+  if(b.dataset.radaruse){setView("home");const i=$("#refUrl");if(i){i.value=b.dataset.radaruse;i.focus();say("Reference filled in — add your angle and press Add idea.","good")}return}
   if(b.dataset.kwseo){seo.k=b.dataset.kwseo;seo.t=seo.t||"";setView("seo");return}
   if(b.dataset.seorun){seo.t=$("#seoT").value;seo.k=$("#seoK").value;seo.d=$("#seoD").value;seo.ac=seo.k.trim()?await suggest(seo.k.trim()):null;renderSeo();return}
   if(b.dataset.seocopy){const t=[...document.querySelectorAll("#vSeo .tags span")].map(x=>x.textContent).join(", ");try{await navigator.clipboard.writeText(t);say("Tags copied.","good")}catch(x){say(t,"good")}return}
   if(!db) return;
+  if(b.dataset.radarrun||b.dataset.growthrun){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:b.dataset.radarrun?"radar":"growth"});say("Queued — the laptop runs it now (free).","good");return}
+  if(b.dataset.ytkeydel){if(!confirm("Remove the YouTube API key from the laptop?"))return;await db.collection("runner").doc("laptop").update({ytKeyNew:"-"});say("Removing — the laptop confirms in a few seconds.","good");return}
   if(b.dataset.kwcheck){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:"kw",q:b.dataset.kwcheck});say("Queued — the laptop reads the top 10 results (free, ~1 min).","good");renderKwList();return}
   if(b.dataset.kwsave){const c=chDoc();const k=[...new Set([...(c.keywords||[]),b.dataset.kwsave])];await db.collection("channels").doc(c.id).update({keywords:k,updated:now()});say("Saved to the channel's scan keywords.","good");return}
   if(b.dataset.seouse){const v=selVideo();if(!v||!seo.t.trim())return;await db.collection("videos").doc(v.id).update({title:seo.t.trim(),titlePicked:true,angle:v.angle!=null?v.angle:v.title,updated:now()});say("Title set on the video.","good");return}
+});
+document.addEventListener("submit",async e=>{ if(e.target.id!=="ytKeyForm"||!db) return; e.preventDefault();
+  const k=$("#ytKeyIn").value.trim(); if(!/^[A-Za-z0-9_-]{30,60}$/.test(k)){say("That doesn't look like an API key (it starts with AIza…).","err");return}
+  $("#ytKeyIn").value=""; await db.collection("runner").doc("laptop").update({ytKeyNew:k}); say("Sent — the laptop tests it within ~10 seconds.","good");
 });
 document.addEventListener("submit",async e=>{ if(e.target.id!=="kwForm") return; e.preventDefault();
   const q=$("#kwIn").value.trim(); if(!q||kwBusy) return; kwSeed=q; kwBusy=true; renderKw(); kwList=await explore(q); kwBusy=false; renderKw();
