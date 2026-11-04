@@ -158,6 +158,7 @@ input::placeholder{color:var(--ink-3)}
 
 .banner{display:flex;gap:10px;align-items:center;padding:12px 16px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--warn);font-size:14px}
 @media (prefers-reduced-motion:no-preference){.card,.sw{animation:rise .35s ease both}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+body.settled .card,body.settled .sw{animation:none}
 
 /* Production desk (2026-11-03): runner jobs, checks, evidence, scenes, readiness */
 .pill.on b{color:var(--ok)} .pill.off b{color:var(--danger)}
@@ -295,7 +296,7 @@ input::placeholder{color:var(--ink-3)}
   </form>
   <div class="banner" id="offline" hidden><svg class="i"><use href="#i-alert"/></svg>The board couldn't reach its saved data. Check your connection and passcode, then reload.</div>
 
-  <section class="slate" aria-label="Current episode">
+  <section class="slate" aria-label="Current video">
     <article class="panel hero" id="hero"></article>
     <div class="kpis" id="kpis"></div>
   </section>
@@ -304,7 +305,7 @@ input::placeholder{color:var(--ink-3)}
   <section class="panel prod" id="prod" aria-labelledby="prod-title">
     <div class="prod-h">
       <h3 id="prod-title">Production desk</h3>
-      <select id="prodPick" aria-label="Episode on the desk"></select>
+      <select id="prodPick" aria-label="Video on the desk"></select>
     </div>
     <div class="ptabs" id="ptabs" role="group" aria-label="Desk view"></div>
     <div id="pbody"></div>
@@ -357,7 +358,8 @@ function makeDb(){
   const coll=(name)=>({
     onSnapshot(cb,err){
       const load=async()=>{const {data,error}=await SB.from(name).select("id,data");
-        if(error){err&&err(error);return} cb({docs:data.map(r=>({id:r.id,data:()=>r.data||{}}))})};
+        if(error){err&&err(error);return}
+        const js=JSON.stringify(data); if(js===(coll._last=coll._last||{})[name]) return; coll._last[name]=js; cb({docs:data.map(r=>({id:r.id,data:()=>r.data||{}}))})};
       load(); SB.channel("rt-"+name).on("postgres_changes",{event:"*",schema:"public",table:name},load).subscribe();
       coll._reload=coll._reload||{}; coll._reload[name]=load; (window._yfReload=window._yfReload||{})[name]=load; return ()=>{};
     },
@@ -438,10 +440,10 @@ function renderPills(){
 function renderHero(){
   const order=v=>idx(v)*1e13+(v.updated||0);
   const cur=videos.filter(v=>v.stage!=="live").sort((a,b)=>order(b)-order(a))[0]; // local name shadows channel id on purpose
-  if(!cur){$("#hero").innerHTML=`<div class="eyebrow">${ic("i-flag")}On the slate</div><h2>No episode in production</h2><p class="facts">Paste a reference video below, or pick one from the swipe file.</p>`;return}
+  if(!cur){$("#hero").innerHTML=`<div class="eyebrow">${ic("i-flag")}On the slate</div><h2>No video in production</h2><p class="facts">Paste a reference video below, or pick one from the swipe file.</p>`;return}
   const i=idx(cur), url=safeUrl(cur.refUrl);
   $("#hero").innerHTML=`
-    <div class="eyebrow">${ic("i-flag")}On the slate · ${cur.ep?"EP "+esc(cur.ep):"New idea"}${channels.length>1?" · "+esc(chName(cur.channel||"business-docs")):""}</div>
+    <div class="eyebrow">${ic("i-flag")}On the slate · ${cur.ep?"Video "+esc(cur.ep):"New idea"}${channels.length>1?" · "+esc(chName(cur.channel||"business-docs")):""}</div>
     <h2>${esc(cur.title||"Untitled idea")}</h2>
     <div class="facts">
       <span>${ic(STAGES[i].icon)}Stage <b>${esc(STAGES[i].name)}</b></span>
@@ -471,7 +473,7 @@ function card(v){
   const i=idx(v), url=safeUrl(v.refUrl), confirming=pendingDel===v.id;
   return `<article class="panel card">
     <div class="prog" aria-hidden="true">${STAGES.map((s,j)=>`<i class="${j<i?"d":j===i?"n":""}"></i>`).join("")}</div>
-    <div class="ep">${v.ep?"EP "+esc(v.ep):"NEW"}${v.runtime?" · "+esc(v.runtime):""}</div>
+    <div class="ep">${v.ep?"Video "+esc(v.ep):"NEW"}${v.runtime?" · "+esc(v.runtime):""}</div>
     <h4>${esc(v.title||"Untitled idea")}</h4>
     ${v.formula?`<span class="chip">${esc(v.formula)}</span>`:""}
     ${v.next?`<div class="cnext">${esc(v.next)}</div>`:""}
@@ -519,7 +521,7 @@ $("#addForm").addEventListener("submit",async e=>{
   const refUrl=$("#refUrl").value.trim(), note=$("#idea").value.trim();
   if(!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(refUrl)){say("That doesn't look like a YouTube link. Paste the full link, starting with https://","err");$("#refUrl").focus();return}
   $("#addBtn").disabled=true;
-  try{await addIdea(refUrl,note);$("#refUrl").value="";$("#idea").value="";say("Added to Idea. Tell Claude “check new ideas” to start it.","good")}
+  try{await addIdea(refUrl,note);$("#refUrl").value="";$("#idea").value="";}
   catch(err){say("Couldn't save: "+(err&&err.message||"try again in a moment."),"err")}
   finally{$("#addBtn").disabled=false}
 });
@@ -576,7 +578,7 @@ renderAll();
 <script>
 // ===== Production desk: board <-> laptop runner (Supabase tables jobs + runner) =====
 const LANES=[
-  {name:"Idea",icon:"i-bulb",steps:[["claude_idea","Outlier check + pattern brief",1]]},
+  {name:"Idea",icon:"i-bulb",steps:[["claude_idea","Outlier check + 10 titles",1]]},
   {name:"Script",icon:"i-pen",steps:[["claude_script","Draft script",1],["claude_factcheck","Fact-check → evidence desk",1],["narration","Narration text"]]},
   {name:"Voice",icon:"i-mic",steps:[["voice","Voice (GPU)"],["finalize","Finalize pace + loudness"],["align","Word timings"]]},
   {name:"Render",icon:"i-clap",steps:[["beatsheet","Beat sheet"],["stock","Fetch stock candidates"],["draft","Draft cut 720p"],["claude_repair","Apply scene notes",1],["final","Final render 1440p"]]},
@@ -600,7 +602,7 @@ function checks(v){
     {id:"facts",name:"Every claim sourced",ok:Array.isArray(c)&&c.length>0&&bad.length===0,
       detail:!s.at?"Waiting for first sync":!Array.isArray(c)?"No evidence file yet — run Fact-check":bad.length?`${bad.length} of ${c.length} claims not verified`:`${c.length} claims verified`},
     {id:"rights",name:"Media rights logged",ok:!!s.assets&&s.assets.unlogged.length===0&&s.assets.total>0,
-      detail:!s.assets?"Waiting for first sync":s.assets.total===0?"No assets in the episode folder":s.assets.unlogged.length?`${s.assets.unlogged.length} files missing from LEDGER.csv: ${s.assets.unlogged.slice(0,3).join(", ")}…`:`${s.assets.logged}/${s.assets.total} files in the ledger`},
+      detail:!s.assets?"Waiting for first sync":s.assets.total===0?"No assets in the video folder":s.assets.unlogged.length?`${s.assets.unlogged.length} files missing from LEDGER.csv: ${s.assets.unlogged.slice(0,3).join(", ")}…`:`${s.assets.logged}/${s.assets.total} files in the ledger`},
     {id:"placeholders",name:"No placeholder scenes",ok:(s.placeholders===0)||!!o.placeholders,ovr:true,
       detail:s.placeholders==null?"Waiting for first sync":s.placeholders===0?"Every beat has a real visual":`${s.placeholders} beats have no visual in the draft${o.placeholders?" — owner confirmed the final cut covers them":""}`},
     {id:"final",name:"Final render exists",ok:!!fin,detail:fin?`${fin.name} · ${(fin.mb/1000).toFixed(1)} GB · ${ago(fin.at)}`:"Run Final render"}
@@ -622,7 +624,7 @@ function stepRow(v,[step,label,tok]){
   const txt=!j?"never run":st==="running"?`running ${j.progress!=null?j.progress+"%":""}`:st==="queued"?(online()?"queued":"queued — starts when the laptop runner is on"):st==="done"?`done ${ago(j.ended)}`:st==="failed"?`failed ${ago(j.ended)} — ${j.error||""}`:st==="cancelled"?`cancelled ${ago(j.ended)}`:st;
   const needEp=!["readiness","sync","claude_idea"].includes(step)&&!(v&&v.ep);
   return `<div class="stp"><span class="nm">${esc(label)}${tok?'<span class="tok" title="Uses your Claude Code usage">· Claude</span>':""}</span>
-    <button data-run="${step}" ${busy||needEp||!v?"disabled":""} title="${needEp?"Set an episode number on this card first":""}">${busy?"…":"Run"}</button>
+    <button data-run="${step}" ${busy||needEp||!v?"disabled":""} title="${needEp?"This video needs a number first":""}">${busy?"…":"Run"}</button>
     <span class="st ${esc(st)}">${j?`<a href="#" data-showjob="${esc(j.id)}">${esc(txt)}</a>`:esc(txt)}</span></div>`;
 }
 function liveBox(){
@@ -637,7 +639,7 @@ function liveBox(){
 function tabRun(v){
   return `<div class="lanes">${LANES.map(l=>`<div class="lane"><h4>${ic(l.icon)}${l.name}</h4>${l.steps.map(s=>stepRow(v,s)).join("")}</div>`).join("")}</div>
   ${liveBox()}
-  <form class="ask" id="askForm"><input id="askIn" placeholder="Ask Claude to do something on this episode (uses Claude usage)…" aria-label="Task for Claude"><button class="gold" type="submit">Send</button></form>`;
+  <form class="ask" id="askForm"><input id="askIn" placeholder="Ask Claude to do something on this video (uses Claude usage)…" aria-label="Task for Claude"><button class="gold" type="submit">Send</button></form>`;
 }
 function tabChecks(v){
   return `<div class="chk">${checks(v).map(c=>`<div class="ck ${c.ok?"ok":""}"><span class="dot2" aria-hidden="true"></span><div><b>${esc(c.name)}</b><small>${esc(c.detail)}</small>
@@ -684,7 +686,7 @@ function tabFiles(v){
 function renderProd(){
   const pick=$("#prodPick"); if(!pick) return;
   const list=videos.filter(v=>v.stage!=="live"); const v=selVideo();
-  pick.innerHTML=list.map(x=>`<option value="${esc(x.id)}" ${v&&x.id===v.id?"selected":""}>${x.ep?"EP "+esc(x.ep)+" · ":""}${esc(x.title||"Untitled")}</option>`).join("")||`<option>No episode in production</option>`;
+  pick.innerHTML=list.map(x=>`<option value="${esc(x.id)}" ${v&&x.id===v.id?"selected":""}>${x.ep?"Video "+esc(x.ep)+" · ":""}${esc(x.title||"Untitled")}</option>`).join("")||`<option>No video in production</option>`;
   const tabs=[["run","Run"],["checks","Checks"],["evidence","Evidence"],["scenes","Scenes"],["files","Files"],["laptop","Laptop"]];
   $("#ptabs").innerHTML=tabs.map(([k,n])=>`<button data-ptab="${k}" aria-pressed="${k===ptab}">${n}${k==="checks"&&v?` ${checks(v).filter(c=>c.ok).length}/${checks(v).length}`:""}</button>`).join("");
   if(document.activeElement&&document.activeElement.matches("#pbody input[type=text],#askIn")) return; // don't wipe typing
@@ -726,7 +728,7 @@ document.addEventListener("submit",async e=>{
   for(let i=0;i<50&&!db;i++) await new Promise(r=>setTimeout(r,200));
   if(!db) return;
   db.collection("jobs").onSnapshot(s=>{jobs=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()});
-  db.collection("runner").onSnapshot(s=>{const d=s.docs.find(x=>x.id==="laptop");runner=d?d.data():{};renderAll()});
+  db.collection("runner").onSnapshot(s=>{const d=s.docs.find(x=>x.id==="laptop");runner=d?d.data():{};const k=JSON.stringify([online(),runner.busy,runner.version,runner.readiness&&runner.readiness.at]);if(k!==window._rk){window._rk=k;renderAll()}});
   setInterval(()=>{if(!document.hidden){window._yfReload?.jobs?.();window._yfReload?.runner?.();const busy=activeJob();if(busy||Math.random()<.25)window._yfReload?.videos?.()}},4000);
 })();
 </script>
@@ -852,7 +854,7 @@ function nextEp(ch){
 addIdea=async function(refUrl,note){
   const ch=cur==="all"?($("#chPick").value||"business-docs"):cur, ep=nextEp(ch);
   await db.collection("videos").add({channel:ch,ep,title:note||"New idea from reference",stage:"idea",refUrl,formula:"",next:"Run Autopilot on the Idea lane (brief + score)",created:Date.now(),updated:Date.now()});
-  say(`Added as EP ${ep}.`,"good");
+  say(`Added as Video ${ep}.`,"good");
 };
 let _epFixed=false;
 async function fixMissingEps(){ if(_epFixed||!db||!allVideos.length) return; _epFixed=true;
@@ -901,7 +903,7 @@ function tabPackage(v){
   const j=lastJob(v.id,"claude_package");
   const head=`<div class="prod-h"><p class="note">Claude writes 10 titles and 10 thumbnail ideas from the script. Pick 3 of each — they pair up in order as your 3 Test & Compare combos.</p>
     <button class="gold" data-run="claude_package" ${j&&["queued","running"].includes(j.status)?"disabled":""}>${pk?"Regenerate":"Generate"} 10 + 10 · Claude</button></div>`;
-  if(!pk) return head+`<p class="note">${j?"Last run: "+esc(j.status)+(j.error?" — "+esc(j.error):""):"Needs a script for this episode first."}</p>`;
+  if(!pk) return head+`<p class="note">${j?"Last run: "+esc(j.status)+(j.error?" — "+esc(j.error):""):"Needs a script for this video first."}</p>`;
   const T=pk.titles||[],H=pk.thumbs||[];
   const combos=[0,1,2].map(i=>({t:T[pick.titles[i]],h:H[pick.thumbs[i]]})).filter(c=>c.t||c.h);
   const ch=channels.find(c=>c.id===(v.channel||"business-docs"))||{};
@@ -940,7 +942,7 @@ const _selV=selVideo;
 selVideo=function(){const v=_selV();return v&&v.parked?null:v};
 async function stopJobs(vid){
   for(const j of jobs.filter(j=>j.video===vid&&["queued","running"].includes(j.status)))
-    await db.collection("jobs").doc(j.id).update({status:j.status==="queued"?"cancelled":"cancel",ended:now(),error:"episode parked or deleted"});
+    await db.collection("jobs").doc(j.id).update({status:j.status==="queued"?"cancelled":"cancel",ended:now(),error:"video parked or deleted"});
 }
 const parkBtns=(v,big)=>`<button class="${big?"":"ghost"}" data-park="${esc(v.id)}" title="Park: take it off the slate for now">${big?"⏸ Park":"⏸"}</button>`+
   (big?`<button class="danger" data-vdel="${esc(v.id)}">Delete</button>`:"");
@@ -951,9 +953,9 @@ renderHero=function(){_hero();const order=v=>idx(v)*1e13+(v.updated||0);
   const top=videos.filter(v=>v.stage!=="live").sort((a,b)=>order(b)-order(a))[0];
   const row=$("#hero .row"); if(top&&row) row.insertAdjacentHTML("beforeend",parkBtns(top,true));};
 function renderParked(){const el=$("#parked"); if(!el) return;
-  el.innerHTML=!parked.length?"":`<details id="parkBox" class="panel" ${parkOpen?"open":""} style="margin-top:14px;padding:12px 16px"><summary><b>Parked</b> · ${parked.length} episode${parked.length>1?"s":""} on hold</summary>
+  el.innerHTML=!parked.length?"":`<details id="parkBox" class="panel" ${parkOpen?"open":""} style="margin-top:14px;padding:12px 16px"><summary><b>Parked</b> · ${parked.length} video${parked.length>1?"s":""} on hold</summary>
   ${parked.sort((a,b)=>(b.parkedAt||0)-(a.parkedAt||0)).map(v=>`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line,#333)">
-    <span style="flex:1;min-width:180px">${v.ep?"EP "+esc(v.ep)+" · ":""}${esc(v.title||"Untitled")} <span class="chip">${esc((STAGES[idx(v)]||{}).name||"")}</span>${v.parkNote?` <i style="opacity:.7">— ${esc(v.parkNote)}</i>`:""}</span>
+    <span style="flex:1;min-width:180px">${v.ep?"Video "+esc(v.ep)+" · ":""}${esc(v.title||"Untitled")} <span class="chip">${esc((STAGES[idx(v)]||{}).name||"")}</span>${v.parkNote?` <i style="opacity:.7">— ${esc(v.parkNote)}</i>`:""}</span>
     <button class="gold" data-unpark="${esc(v.id)}">▶ Back on the slate</button><button class="danger" data-vdel="${esc(v.id)}">Delete</button></div>`).join("")}</details>`;}
 const _all=renderAll;
 renderAll=function(){_all();renderParked()};
@@ -961,16 +963,148 @@ document.addEventListener("click",async e=>{
   const b=e.target.closest("button"); if(!b||!db) return;
   try{
     if(b.dataset.park){const v=allVideos.find(x=>x.id===b.dataset.park); if(!v) return;
-      const note=prompt("Park “"+(v.title||"this episode")+"”. Optional reason (leave blank to skip):",""); if(note===null) return;
+      const note=prompt("Park “"+(v.title||"this video")+"”. Optional reason (leave blank to skip):",""); if(note===null) return;
       await stopJobs(v.id); await db.collection("videos").doc(v.id).update({parked:true,parkedAt:now(),parkNote:note.trim(),updated:Date.now()});
       if(sel===v.id) sel=""; say("Parked. It's under “Parked” below the board.","good")}
     else if(b.dataset.unpark){await db.collection("videos").doc(b.dataset.unpark).update({parked:false,parkNote:"",updated:Date.now()});say("Back on the slate.","good")}
     else if(b.dataset.vdel){const v=allVideos.find(x=>x.id===b.dataset.vdel); if(!v) return;
-      if(!confirm("Delete “"+(v.title||"this episode")+"” from the board?\n\nThis can't be undone. Its files on the laptop are kept.")) return;
+      if(!confirm("Delete “"+(v.title||"this video")+"” from the board?\n\nThis can't be undone. Its files on the laptop are kept.")) return;
       await stopJobs(v.id); await db.collection("videos").doc(v.id).delete(); if(sel===v.id) sel=""; say("Deleted from the board.","good")}
     else if(b.dataset.del&&b.dataset.confirm) await stopJobs(b.dataset.del);   // existing card trash button
   }catch(err){say("Couldn't save that change: "+(err&&err.message||"try again."),"err")}
 },true);
 if(db) renderAll();
 </script>
+<style>
+.idesk{display:grid;gap:14px}
+.idesk h4{margin:0 0 6px}
+.refl{display:grid;gap:8px}
+.refi{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.refi .rt{flex:1;min-width:0}.refi .rt>b{display:block;overflow-wrap:anywhere}.refi small{opacity:.75}
+.radd{display:flex;gap:8px;flex-wrap:wrap}.radd input{flex:1;min-width:200px}
+.tl{display:grid;gap:6px}
+.tli{display:flex;gap:10px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.tli.on{border-color:var(--gold,#c9a227);background:rgba(201,162,39,.08)}
+.tli span{flex:1}.tli small{display:block;opacity:.75}
+.md{font-size:.92em;line-height:1.5;max-height:420px;overflow:auto;padding:4px 2px}.md h1,.md h2,.md h3{font-size:1em;margin:12px 0 4px}
+.live pre{max-height:340px;overflow:auto;white-space:pre-wrap}
+.angle{opacity:.75;font-size:.9em;margin-top:-4px}
+.st a[data-showjob]{text-decoration:underline}
+</style>
+<script>
+/* ===== v4 (2026-11-04): Idea desk (reference videos, curated titles, brief), job log viewer, live Next hint, no bounce ===== */
+setTimeout(()=>document.body.classList.add("settled"),1500);
+const refsOf=v=>{const r=Array.isArray(v.refs)?v.refs.filter(Boolean):[];return r.length?r:(v.refUrl?[v.refUrl]:[])};
+const isYT=u=>/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(u);
+const fmtT=s=>!s?"":s>=3600?`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`:`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+const nfmt=n=>n==null?"?":n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"K":String(n);
+function mdHtml(t){
+  const inl=x=>esc(x).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  let out="",list=false;
+  (t||"").split(/\r?\n/).forEach(l=>{const h=/^(#{1,4})\s+(.*)/.exec(l),li=/^\s*[-*]\s+(.*)/.exec(l)||/^\s*\d+\.\s+(.*)/.exec(l);
+    if(li){if(!list){out+="<ul>";list=true}out+="<li>"+inl(li[1])+"</li>";return}
+    if(list){out+="</ul>";list=false}
+    out+=h?`<h3>${inl(h[2])}</h3>`:l.trim()?`<p>${inl(l)}</p>`:""});
+  return out+(list?"</ul>":"");
+}
+function nextHint(v){
+  const id=v.idea, j=lastJob(v.id,"claude_idea"), busy=j&&["queued","running"].includes(j.status);
+  if(busy) return "Claude is writing the brief and 10 title options…";
+  if(!refsOf(v).length) return "Add a reference video (Production desk → Idea)";
+  if(!id) return j&&j.status==="failed"?"Idea step failed — see why in Production desk → Idea, then run it again":"Run the Idea step (Production desk → Idea)";
+  if(id.status!=="ok") return "Brief blocked — "+(id.reason||"see Production desk → Idea")+". Fix and run again";
+  if(!v.titlePicked) return "Pick one of Claude's 10 titles (Production desk → Idea)";
+  return gateOk(v)?"Advance to Script":"Read the brief, then tick the Idea gate";
+}
+const _ra4=renderAll;
+renderAll=function(){(allVideos||[]).forEach(v=>{if(v.stage==="idea")v.next=nextHint(v)});_ra4()};
+// hero: angle vs title, all reference videos
+const _hero4=renderHero;
+renderHero=function(){_hero4();const h=$("#hero");if(!h)return;
+  const order=x=>idx(x)*1e13+(x.updated||0); const v=videos.filter(x=>x.stage!=="live").sort((a,b)=>order(b)-order(a))[0]; if(!v) return;
+  const r=refsOf(v), a=h.querySelector("a.ref");
+  if(a&&r.length>1) a.lastChild.textContent=r.length+" reference videos";
+  if(v.stage==="idea"&&!v.titlePicked){const t=h.querySelector("h2");if(t)t.insertAdjacentHTML("afterend",`<p class="angle">Your angle — not the title yet. Claude proposes 10 titles in Production desk → Idea.</p>`)}
+};
+// idea lane: a free "read references" step
+LANES.find(l=>l.name==="Idea").steps.unshift(["refs","Read reference videos (free)"]);
+// score chip when the brief was blocked
+const _card4=card; card=v=>{let h=_card4(v);const sc=v.sync&&v.sync.score;if(sc&&sc.total==null)h=h.replace(/Score (undefined)?\/60 · [a-z]*/,"Score: needs a brief");return h};
+// job log: say it can be opened
+const _stepRow4=stepRow;
+stepRow=function(v,st){return _stepRow4(v,st).replace(/(data-showjob="[^"]+">)([^<]*)<\/a>/,'$1$2 · view log</a>')};
+liveBox=function(){
+  const j=jobs.find(x=>x.id===showJob)||activeJob(); if(!j) return `<p class="note">No job running. Press Run on any step — the laptop runner picks it up (one GPU job at a time). Click a step's status to see its log.</p>`;
+  const busy=["running","queued"].includes(j.status), when=j.ended?ago(j.ended):j.started?"started "+ago(j.started):"";
+  return `<div class="live" aria-live="polite"><div class="prod-h"><b>${esc(j.label||j.step)} · ${esc(j.channel)} ${j.ep?"Video "+esc(j.ep):""} · ${esc(j.status)}${j.progress!=null&&busy?" · "+j.progress+"%":""} ${when?"· "+esc(when):""}</b>
+    <span>${busy?`<button class="danger" data-cancel-job="${esc(j.id)}">Cancel</button>`:""}${["claude_idea","refs","claude_score"].includes(j.step)?` <button data-ptab="idea">Open result</button>`:j.step==="claude_package"?` <button data-ptab="package">Open result</button>`:""} ${showJob?`<button data-closejob="1">Close</button>`:""}</span></div>
+    <div class="bar"><i style="width:${j.status==="done"?100:(j.progress||0)}%"></i></div>
+    ${j.error?`<p class="msg err">${esc(j.error)}</p>`:""}
+    <pre>${esc((j.log||[]).join("\n"))||"waiting for output…"}</pre><p class="note">Full log on the laptop: shared\\runner\\logs\\${esc(j.id)}.log</p></div>`;
+};
+// Idea tab
+let ptabChosen=false;
+document.addEventListener("click",e=>{if(e.target.closest("[data-ptab],[data-showjob]"))ptabChosen=true},true);
+function tabIdea(v){
+  const refs=refsOf(v), meta=v.refsMeta||[], id=v.idea, j=lastJob(v.id,"claude_idea"), rj=lastJob(v.id,"refs");
+  const busy=x=>x&&["queued","running","cancel"].includes(x.status);
+  const m=u=>meta.find(x=>x.url===u)||{};
+  const stat=x=>!x?"never run":`<a href="#" data-showjob="${esc(x.id)}">${esc(x.status)} ${esc(ago(x.ended||x.created))} · view log</a>`;
+  let h=`<div class="idesk">
+  <div><h4>Your angle</h4><p class="note">Rough direction for Claude — a niche, a question, a hunch. It is not used as the title.</p>
+    <div class="radd"><input type="text" id="angleIn" value="${esc(v.angle!=null?v.angle:(v.titlePicked?"":v.title||""))}" placeholder="e.g. how a few families kept their wealth for 200 years"><button data-saveangle="1">Save angle</button></div></div>
+  <div><h4>Reference videos · ${refs.length}</h4><div class="refl">${refs.map((u,i)=>{const x=m(u);return `<div class="refi"><div class="rt"><b>${x.title?esc(x.title):`<a href="${esc(safeUrl(u)||"#")}" target="_blank" rel="noopener">${esc(u)}</a>`}</b>
+      <small>${x.title?`${esc(x.channel||"")} · ${nfmt(x.subs)} subs · ${nfmt(x.views)} views${x.multiple?` · <b>${esc(x.multiple)}× channel median</b>`:""}${x.duration?" · "+fmtT(x.duration):""}${x.uploaded?" · "+esc(String(x.uploaded).replace(/(\d{4})(\d\d)(\d\d)/,"$1-$2-$3")):""} · captions ${x.captions?"✓":"✗"} · <a href="${esc(safeUrl(u)||"#")}" target="_blank" rel="noopener">open</a>`:"Not read yet — press Read references"}</small></div>
+      <button class="danger" data-refdel="${i}" aria-label="Remove reference">Remove</button></div>`}).join("")||`<p class="note">No reference video yet.</p>`}</div>
+    <div class="radd" style="margin-top:8px"><input type="text" id="refAdd" inputmode="url" placeholder="Add another reference: https://youtu.be/…"><button data-refadd="1">Add reference</button>
+      <button data-run="refs" ${busy(rj)||!refs.length?"disabled":""}>Read references (free)</button></div><p class="note">Read references: ${stat(rj)}</p></div>
+  <div class="prod-h"><div><h4>Brief + 10 title options</h4><p class="note">Last run: ${stat(j)}</p></div>
+    <button class="gold" data-run="claude_idea" ${busy(j)||!refs.length?"disabled":""}>${busy(j)?"Working…":id?"Run again · Claude":"Run Idea step · Claude"}</button></div>`;
+  if(j&&j.status==="failed"&&(!id||id.status!=="ok")) h+=`<p class="msg err">${esc(j.error||"Failed")} — <a href="#" data-showjob="${esc(j.id)}">see the log</a></p>`;
+  if(id&&id.status!=="ok") h+=`<p class="msg err"><b>Brief blocked:</b> ${esc(id.reason||"no reason given")}</p>`;
+  if(id&&id.status==="ok"){
+    h+=`<div><p class="note"><b>Verdict:</b> ${esc(id.verdict||"")}${id.multiple?` · ${esc(id.multiple)}× outlier`:""}${id.pattern?" · "+esc(id.pattern):""}</p>
+      ${(id.insights||[]).length?`<h4>3 original insights</h4><ul>${id.insights.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>
+    <div><h4>Pick a title</h4><div class="tl">${(id.titles||[]).map((x,i)=>{const on=v.titlePicked&&v.title===x.t;return `<div class="tli ${on?"on":""}"><span><b>${esc(x.t)}</b><small>${esc(x.angle||"")}${x.why?" · "+esc(x.why):""} · ${esc(x.score??"")}/10 · ${String(x.t||"").length} chars</small></span>
+      <button ${on?"class=\"gold\" disabled":""} data-usetitle="${i}">${on?"Chosen":"Use"}</button></div>`}).join("")}</div>
+      <div class="radd" style="margin-top:8px"><input type="text" id="ownTitle" placeholder="…or write your own title"><button data-owntitle="1">Use my title</button></div></div>`;
+  }
+  if(id&&id.brief) h+=`<details ${id.status!=="ok"?"open":""}><summary><b>Full brief</b> ${id.at?"· "+esc(ago(id.at)):""}</summary><div class="md">${mdHtml(id.brief)}</div></details>`;
+  else if(!id) h+=`<p class="note">Nothing yet. The Idea step reads the reference videos (title, views, channel median, transcript), then Claude writes the brief and 10 original titles. Results appear here.</p>`;
+  return h+`</div>`;
+}
+const _renderProd4=renderProd;
+renderProd=function(){
+  const v0=selVideo(); if(!ptabChosen&&v0&&v0.stage==="idea"&&ptab==="run") ptab="idea";
+  _renderProd4();
+  const t=$("#ptabs"); if(!t) return; const v=selVideo();
+  if(!t.querySelector('[data-ptab="idea"]')) t.insertAdjacentHTML("afterbegin",`<button data-ptab="idea" aria-pressed="${ptab==="idea"}">Idea</button>`);
+  const ck=t.querySelector('[data-ptab="checks"]'); if(ck&&v&&idx(v)<STAGES.findIndex(s=>s.id==="render")) ck.textContent="Checks";
+  if(ptab==="idea"&&!(document.activeElement&&document.activeElement.matches("#pbody input[type=text]"))){
+    $("#pbody").innerHTML=v?tabIdea(v):`<p class="note">Add an idea first.</p>`;
+    t.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ptab==="idea"))}
+};
+addIdea=async function(refUrl,note){
+  const ch=cur==="all"?($("#chPick").value||"business-docs"):cur, ep=nextEp(ch);
+  const r=await db.collection("videos").add({channel:ch,ep,title:note||"New idea",angle:note||"",titlePicked:false,stage:"idea",refUrl,refs:[refUrl],formula:"",created:Date.now(),updated:Date.now()});
+  sel=r.id; try{localStorage.setItem("yf-sel",sel)}catch(e){} ptab="idea"; ptabChosen=true;
+  say(`Added as Video ${ep}. Next: Production desk → Idea → Run Idea step.`,"good");
+};
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.closejob){showJob=null;renderProd();return}
+  if(!db) return; const v=selVideo(); if(!v) return;
+  const up=async(patch,msg)=>{try{await db.collection("videos").doc(v.id).update({...patch,updated:now()});if(msg)say(msg,"good")}catch(err){say("Couldn't save: "+(err&&err.message||"try again"),"err")}};
+  if(b.dataset.refadd){const i=$("#refAdd"),u=i.value.trim();if(!isYT(u)){say("Paste a full YouTube link (https://youtu.be/… or youtube.com/…)","err");i.focus();return}
+    if(refsOf(v).includes(u)){say("Already in the list.","err");return} i.value=""; i.blur(); await up({refs:[...refsOf(v),u],refUrl:v.refUrl||u},"Reference added. Press Read references (free) or Run the Idea step.")}
+  else if(b.dataset.refdel){const r=refsOf(v).filter((_,i)=>i!==+b.dataset.refdel);await up({refs:r,refUrl:r[0]||""})}
+  else if(b.dataset.saveangle){const a=$("#angleIn").value.trim();$("#angleIn").blur();await up(v.titlePicked?{angle:a}:{angle:a,title:a||v.title},"Angle saved.")}
+  else if(b.dataset.usetitle){const x=((v.idea||{}).titles||[])[+b.dataset.usetitle];if(!x)return;
+    await up({title:x.t,titlePicked:true,titleAngle:x.angle||"",angle:v.angle!=null?v.angle:v.title},"Title set. Read the brief, tick the Idea gate, then Advance.")}
+  else if(b.dataset.owntitle){const t=$("#ownTitle").value.trim();if(!t){$("#ownTitle").focus();return}$("#ownTitle").blur();
+    await up({title:t,titlePicked:true,angle:v.angle!=null?v.angle:v.title},"Title set.")}
+});
+renderAll();
+</script>
+
 </body></html>
