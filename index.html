@@ -1107,4 +1107,186 @@ document.addEventListener("click",async e=>{
 renderAll();
 </script>
 
+<style>
+/* ===== v5 sidebar ===== */
+#side{display:flex;flex-direction:column;gap:2px;background:var(--surface);border-right:1px solid var(--line);padding:14px 10px;z-index:30}
+#side .sg{font:600 10.5px/1 var(--ui);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin:14px 10px 6px}
+#side button{display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:0 10px;border:0;border-radius:8px;background:none;color:var(--ink-2);font:500 14px var(--ui);text-align:left;cursor:pointer;white-space:nowrap}
+#side button:hover{background:var(--raise);color:var(--ink)}
+#side button[aria-current="page"]{background:var(--gold-soft);color:var(--gold)}
+#side button[disabled]{opacity:.45;cursor:default}
+#side button .i{flex:none;width:18px;height:18px}
+#side .later{margin-left:auto;font-size:10px;opacity:.8}
+#side .col{margin-top:auto;flex-direction:row;justify-content:flex-start}
+.vhide{display:none!important}
+@media (min-width:1000px){
+  body{padding-left:212px}
+  #side{position:fixed;inset:0 auto 0 0;width:212px;overflow:auto}
+  body.sidecol{padding-left:62px} body.sidecol #side{width:62px} body.sidecol #side .lbl,body.sidecol #side .sg,body.sidecol #side .later{display:none}
+}
+@media (max-width:999px){
+  #side{position:sticky;top:0;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:6px 8px}
+  #side .sg,#side .col,#side .later{display:none} #side button{width:auto;flex:none}
+}
+.tool{display:grid;gap:14px}
+.tool .bar2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tool .bar2 input,.tool .bar2 textarea{flex:1;min-width:220px}
+.tool textarea{font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:8px 10px}
+.kwl{display:grid;gap:6px}
+.kwi{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.kwi small{opacity:.75}.kwi .acts{display:flex;gap:6px;flex-wrap:wrap}
+.gap{font:600 12px var(--mono);padding:2px 8px;border-radius:999px;background:var(--raise)}
+.gap.high{background:var(--ok-soft);color:var(--ok)}.gap.low{color:var(--danger)}
+.seoc{display:grid;gap:6px}.seoc div{display:flex;gap:8px;align-items:baseline}.seoc .p{color:var(--ok)}.seoc .w{color:var(--warn)}
+.bigscore{font:400 44px/1 var(--display)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}.tags span{padding:3px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px}
+</style>
+<script>
+/* ===== v5 (2026-11-04): left sidebar + research studio (keywords & gaps, competitors, title/SEO lab, jobs). Sidebar only shows/hides existing sections — no DOM moves. ===== */
+(function(){
+const VIEWS={home:[".slate","#addForm","section[aria-labelledby=pipe-h]","#parked"],desk:["#prod"],outliers:["section[aria-labelledby=swipe-h]"],kw:["#vKw"],comp:["#vComp"],seo:["#vSeo"],jobs:["#vJobs"]};
+const NAV=[["Workspace",[["home","i-flag","Pipeline"],["desk","i-clap","Production desk"]]],
+  ["Research",[["outliers","i-bulb","Outlier finder"],["kw","i-link","Keywords & gaps"],["comp","i-film","Competitors"]]],
+  ["Packaging",[["seo","i-pen","Title & SEO lab"]]],
+  ["Channel",[["settings","i-check","Channel settings"],["analytics","i-play","Analytics",1]]],
+  ["System",[["jobs","i-clock","Jobs & laptop"]]]];
+let view=(()=>{try{return localStorage.getItem("yf-view")||"home"}catch(e){return "home"}})(); if(!VIEWS[view]) view="home";
+const wrap=document.querySelector(".wrap");
+wrap.insertAdjacentHTML("beforeend",`<section class="panel tool" id="vKw"></section><section class="panel tool" id="vComp"></section><section class="panel tool" id="vSeo"></section><section class="panel tool" id="vJobs"></section>`);
+document.body.insertAdjacentHTML("afterbegin",`<aside id="side" aria-label="Sections">${NAV.map(([g,items])=>`<div class="sg">${g}</div>`+items.map(([k,icon,l,later])=>`<button data-view="${k}" title="${l}${later?" — after launch":""}" ${later?"disabled":""}>${ic(icon)}<span class="lbl">${l}</span>${later?'<span class="later">after launch</span>':""}</button>`).join("")).join("")}
+  <button class="col" data-sidecol="1" title="Collapse sidebar">${ic("i-left")}<span class="lbl">Collapse</span></button></aside>`);
+try{if(localStorage.getItem("yf-sidecol")==="1")document.body.classList.add("sidecol")}catch(e){}
+window.setView=function(v){view=v;try{localStorage.setItem("yf-view",v)}catch(e){}
+  Object.entries(VIEWS).forEach(([k,sels])=>sels.forEach(s=>document.querySelectorAll(s).forEach(el=>el.classList.toggle("vhide",k!==v))));
+  document.querySelectorAll("#side [data-view]").forEach(b=>b.setAttribute("aria-current",b.dataset.view===v?"page":"false"));
+  renderTool(); window.scrollTo({top:0});
+};
+function renderTool(){ if(view==="kw")renderKw(); else if(view==="comp")renderComp(); else if(view==="seo")renderSeo(); else if(view==="jobs")renderJobs(); }
+const _ra5=renderAll; renderAll=function(){_ra5(); if(["comp","jobs"].includes(view)&&!(document.activeElement&&document.activeElement.closest(".tool"))) renderTool(); else if(view==="kw") renderKwList()};
+
+// ---------- free YouTube autocomplete (JSONP; demand signal, NOT search volume)
+const acCache={};
+function suggest(q){ if(acCache[q]) return Promise.resolve(acCache[q]);
+  return new Promise(res=>{const cb="yfac"+Math.random().toString(36).slice(2);const s=document.createElement("script");
+    const done=v=>{delete window[cb];s.remove();res(v)}; const t=setTimeout(()=>done([]),6000);
+    window[cb]=d=>{clearTimeout(t);const v=((d&&d[1])||[]).map(x=>Array.isArray(x)?x[0]:x);acCache[q]=v;done(v)};
+    s.src=`https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=en&q=${encodeURIComponent(q)}&callback=${cb}`; s.onerror=()=>{clearTimeout(t);done([])}; document.head.appendChild(s)})}
+async function explore(seed){
+  const base=await suggest(seed), out=new Map(); base.forEach((x,i)=>out.set(x,{q:x,top:true,rank:i}));
+  const pre=["", ..."abcdefghijklmnopqrstuvwxyz".split("")].slice(1).map(c=>seed+" "+c).concat(["how "+seed,"why "+seed,seed+" documentary"]);
+  for(let i=0;i<pre.length;i+=6){(await Promise.all(pre.slice(i,i+6).map(suggest))).flat().forEach((x,k)=>{if(!out.has(x))out.set(x,{q:x,top:false,rank:10+k})})}
+  return [...out.values()];
+}
+// ---------- Keywords & content gaps
+let kwSeed="", kwList=[], kwBusy=false;
+const chDoc=()=>channels.find(c=>c.id===(cur==="all"?"business-docs":cur))||{};
+const med=a=>{const s=[...a].filter(x=>x!=null).sort((x,y)=>x-y);return s.length?s[Math.floor(s.length/2)]:0};
+function gapOf(r){ if(!r||!r.top||!r.top.length) return null;
+  const top=r.top, m=med(top.map(x=>x.views||0)), yr=d=>d?+String(d).slice(0,4):0, Y=new Date().getFullYear();
+  const small=top.filter(x=>(x.subs||0)<100000&&(x.views||0)>=100000).length, old=top.filter(x=>yr(x.date)&&Y-yr(x.date)>=3).length, longf=top.filter(x=>(x.dur||0)>=600).length;
+  const demand=Math.min(40,Math.max(0,(Math.log10(m||1)-3)/3*40)), beat=Math.min(30,small*8), stale=Math.min(30,old*4)-(longf>=8&&small===0?10:0);
+  const sc=Math.round(Math.max(0,demand+beat+stale));
+  return {sc,lvl:sc>=60?"high":sc>=35?"medium":"low",m,small,old,longf,why:`median ${nfmt(m)} views in top 10 · ${small} small channels (<100K subs) with 100K+ views · ${old} results 3+ years old · ${longf}/10 long-form`};
+}
+function renderKw(){
+  const c=chDoc(); const el=$("#vKw"); if(!el) return;
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Keywords & content gaps</h3><p>YouTube's own search suggestions show what people type (a demand signal, not exact search volume). "Check competition" has the laptop read the top 10 results for free, then scores the gap: lots of views, small or old competitors = a topic you can win.</p></div>
+  <form class="bar2" id="kwForm"><input type="text" id="kwIn" value="${esc(kwSeed)}" placeholder="Seed topic, e.g. family dynasty, company collapse"><button class="gold" type="submit">${kwBusy?"Exploring…":"Explore"}</button></form>
+  ${(c.keywords||[]).length?`<p class="note">Channel keywords: ${(c.keywords||[]).map(k=>`<a href="#" data-kwseed="${esc(k)}">${esc(k)}</a>`).join(" · ")}</p>`:""}
+  <div id="kwOut"></div>`;
+  renderKwList();
+}
+function renderKwList(){
+  const o=$("#kwOut"); if(!o) return; const c=chDoc(), res=c.kw||{};
+  const checked=Object.values(res).sort((a,b)=>(gapOf(b)||{sc:0}).sc-(gapOf(a)||{sc:0}).sc);
+  const jobFor=q=>jobs.filter(j=>j.step==="scan"&&(j.args||{}).mode==="kw"&&(j.args||{}).q===q).sort((a,b)=>b.created-a.created)[0];
+  const row=(q,extra)=>{const r=res[q.toLowerCase()],g=gapOf(r),j=jobFor(q),busy=j&&["queued","running"].includes(j.status);
+    return `<div class="kwi"><div><b>${esc(q)}</b> ${g?`<span class="gap ${g.lvl}">gap ${g.sc}</span>`:""} ${extra||""}<br><small>${g?esc(g.why):busy?"laptop is reading the top results…":j&&j.status==="failed"?"check failed — "+esc(j.error||""):"not checked yet"}</small></div>
+      <div class="acts"><button data-kwcheck="${esc(q)}" ${busy?"disabled":""}>${g?"Recheck":"Check competition"}</button><button data-kwsave="${esc(q)}" title="Add to the channel's scan keywords">Save</button><button data-kwseo="${esc(q)}">Title lab</button></div>
+      ${g?`<details style="grid-column:1/-1"><summary>Top results</summary><ol>${r.top.map(x=>`<li><a href="${esc(safeUrl(x.url)||"#")}" target="_blank" rel="noopener">${esc(x.t||"")}</a> <small>· ${esc(x.ch||"")} (${nfmt(x.subs)} subs) · ${nfmt(x.views)} views · ${esc(String(x.date||"").slice(0,4))}</small></li>`).join("")}</ol></details>`:""}</div>`};
+  o.innerHTML=(checked.length?`<h4>Checked keywords · best gaps first</h4><div class="kwl">${checked.map(r=>row(r.q)).join("")}</div>`:"")+
+    (kwList.length?`<h4 style="margin-top:14px">Suggestions for “${esc(kwSeed)}” · ${kwList.length}</h4><div class="kwl">${kwList.filter(x=>!res[x.q.toLowerCase()]).map(x=>row(x.q,x.top?'<span class="gap">top suggestion</span>':"")).join("")}</div>`:
+     checked.length?"":`<p class="note">Type a seed topic and press Explore.</p>`);
+}
+// ---------- Competitors (from swipe-file scans)
+function renderComp(){
+  const el=$("#vComp"); if(!el) return; const c=chDoc(), comp=c.competitors||[];
+  const g={}; swipe.forEach(o=>{const k=o.ytChannel||o.channelName||"(unknown)";(g[k]=g[k]||[]).push(o)});
+  const rows=Object.entries(g).map(([k,a])=>({k,n:a.length,best:a.reduce((m,o)=>(o.multiple||0)>(m.multiple||0)?o:m,a[0]),medv:med(a.map(o=>o.median)),f:[...new Set(a.map(o=>o.formula).filter(Boolean))],last:Math.max(...a.map(o=>o.scanned||0))})).sort((a,b)=>b.n-a.n||(b.best.multiple||0)-(a.best.multiple||0));
+  const lastScan=jobs.filter(j=>j.step==="scan"&&(j.args||{}).mode==="competitors").sort((a,b)=>b.created-a.created)[0];
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Competitors</h3><p>Who keeps producing outliers in your niche, how big their usual video is, and which title formulas win. Built from your scans; the laptop rescans daily.</p></div>
+   <div class="bar2"><button class="gold" data-compscan="1">Scan competitors now (free)</button><button data-editch="1">Edit competitor list</button><span class="note">${lastScan?`Last scan: ${esc(lastScan.status)} ${esc(ago(lastScan.ended||lastScan.created))}${lastScan.error?" — "+esc(lastScan.error):""}`:"Never scanned"}</span></div>
+   <p class="note">Tracking ${comp.length} channel${comp.length===1?"":"s"}: ${comp.map(esc).join(", ")||"none — add some in Edit competitor list"}</p>
+   ${rows.length?`<div class="tscroll"><table class="tbl"><thead><tr><th>Channel</th><th>Outliers</th><th>Best</th><th>Usual views</th><th>Winning formulas</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.k)}</b></td><td>${r.n}</td><td>${Number(r.best.multiple||0).toFixed(1)}× <small><a href="${esc(safeUrl(r.best.url)||"#")}" target="_blank" rel="noopener">${esc((r.best.title||"").slice(0,60))}</a></small></td><td>${nfmt(r.medv)}</td><td>${r.f.map(x=>`<span class="chip">${esc(x)}</span>`).join(" ")||"—"}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">No scan data yet.</p>`}`;
+}
+// ---------- Title & SEO lab
+const POWER=/\b(secret|hidden|untold|truth|why|how|rise|fall|collapse|lost|empire|dynasty|richest|billion|trillion|forgotten|inside|real|myth|quietly|owns?|controls?)\b/i;
+const BAIT=/(you won'?t believe|shocking|gone wrong|!!+|\?\?+)/i;
+let seo={t:"",k:"",d:"",ac:null};
+function seoChecks(){const t=seo.t.trim(),k=seo.k.trim().toLowerCase(),d=seo.d.trim(),L=t.length,tl=t.toLowerCase(),R=[];
+  const add=(ok,w,txt)=>R.push({ok,w,txt});
+  add(L>=30&&L<=70,20,`Length ${L} characters (aim for 45–65; YouTube cuts at ~70)`);
+  add(L<=55||POWER.test(t.slice(0,55)),10,`The hook survives the phone cut-off: “${t.slice(0,55)}${L>55?"…":""}”`);
+  if(k){add(tl.includes(k),15,`Contains the keyword “${k}”`);add(tl.indexOf(k)>=0&&tl.indexOf(k)<=L/2,10,"Keyword sits in the first half")}
+  add(/\d|\$|₹|£|€/.test(t),10,"Has a number, year or money figure (specific beats vague)");
+  add(POWER.test(t),10,"Uses a curiosity/stakes word (secret, rise, fall, empire, why…)");
+  add(!BAIT.test(t)&&(t.match(/\b[A-Z]{4,}\b/g)||[]).length<=2,10,"No clickbait phrasing or shouting caps");
+  const words=s=>new Set(s.toLowerCase().match(/[a-z0-9$]+/g)||[]), A=words(t);
+  const near=swipe.map(o=>{const B=words(o.title||"");const i=[...A].filter(x=>B.has(x)).length;return {o,j:i/Math.max(1,new Set([...A,...B]).size)}}).sort((a,b)=>b.j-a.j)[0];
+  add(!near||near.j<.6,10,near&&near.j>=.6?`Too close to a competitor title: “${near.o.title}”`:"Original — not a copy of a swipe-file title");
+  if(k&&seo.ac) add(seo.ac.length>0,5,seo.ac.length?`People search it — YouTube suggests ${seo.ac.length} phrases for “${k}”`:`YouTube suggests nothing for “${k}” — few people type it`);
+  if(d){add(d.toLowerCase().slice(0,150).includes(k||"\u0000"),5,"Description mentions the keyword in its first 150 characters");add(d.length>=200,5,`Description ${d.length} characters (aim 200+)`)}
+  const tot=R.reduce((s,x)=>s+x.w,0)||1; return {R,score:Math.round(R.filter(x=>x.ok).reduce((s,x)=>s+x.w,0)/tot*100)};
+}
+function renderSeo(){
+  const el=$("#vSeo"); if(!el) return; const v=selVideo(); const ideas=((v&&v.idea)||{}).titles||[];
+  const {R,score}=seo.t?seoChecks():{R:[],score:0};
+  const tags=[...new Set([seo.k,...(seo.ac||[]),...((seo.t.match(/[A-Za-z][A-Za-z'’-]{3,}/g)||[]).map(x=>x.toLowerCase()))].filter(Boolean))].slice(0,25);
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Title & SEO lab</h3><p>Check a title before you commit: length, phone cut-off, keyword, specificity, originality vs. competitors, and whether people actually search the phrase. Thumbnails: Production desk → Package.</p></div>
+   <div class="bar2"><input type="text" id="seoT" value="${esc(seo.t)}" placeholder="Title to check"><input type="text" id="seoK" value="${esc(seo.k)}" placeholder="Target keyword (optional)" style="max-width:280px"><button class="gold" data-seorun="1">Check</button></div>
+   <textarea id="seoD" rows="3" placeholder="Description draft (optional)">${esc(seo.d)}</textarea>
+   ${ideas.length?`<p class="note">Claude's titles for ${v.ep?"Video "+esc(v.ep):"this video"}: ${ideas.map((x,i)=>`<a href="#" data-seoload="${i}">${esc(x.t)}</a>`).join(" · ")}</p>`:""}
+   ${seo.t?`<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><span class="bigscore">${score}</span><span class="note">/100 title score</span>
+      ${v?`<button data-seouse="1">Use as title for ${v.ep?"Video "+esc(v.ep):"current video"}</button>`:""}</div>
+     <div class="seoc">${R.map(x=>`<div><b class="${x.ok?"p":"w"}">${x.ok?"✓":"!"}</b><span>${esc(x.txt)}</span></div>`).join("")}</div>
+     <div><h4>Tag ideas (${tags.join(", ").length}/500 chars)</h4><div class="tags">${tags.map(x=>`<span>${esc(x)}</span>`).join("")}</div><button style="margin-top:8px" data-seocopy="1">Copy tags</button></div>`:""}`;
+}
+// ---------- Jobs & laptop
+function renderJobs(){
+  const el=$("#vJobs"); if(!el) return; const vn=id=>{const v=allVideos.find(x=>x.id===id);return v?(v.ep?"Video "+v.ep:"")+" "+(v.title||"").slice(0,40):""};
+  const L=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0)).slice(0,60);
+  const dur=j=>j.started&&j.ended?Math.max(1,Math.round((j.ended-j.started)/1000)):null;
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Jobs & laptop</h3><p>Everything the laptop ran, newest first. Open any log.</p></div>${tabLaptop()}
+   <div class="tscroll"><table class="tbl"><thead><tr><th>When</th><th>Step</th><th>Video</th><th>Status</th><th>Took</th><th></th></tr></thead><tbody>
+   ${L.map(j=>{const d=dur(j);return `<tr><td>${esc(ago(j.created))}</td><td>${esc(j.label||j.step)}<br><small class="note">${esc(j.by||"")}</small></td><td>${esc(vn(j.video))}</td><td class="s-${j.status==="done"?"verified":j.status==="failed"?"wrong":"unverified"}">${esc(j.status)}${j.error?`<br><small>${esc(j.error.slice(0,90))}</small>`:""}</td><td>${d?(d>=60?Math.round(d/60)+"m":d+"s"):"—"}</td><td><button data-joblog="${esc(j.id)}">Log</button></td></tr>`}).join("")}</tbody></table></div>`;
+}
+// ---------- events
+document.addEventListener("click",e=>{
+  const nv=e.target.closest("#side [data-view]"); if(nv){const k=nv.dataset.view; if(k==="settings"){setView("home");openEdit&&openEdit();setTimeout(()=>{const f=$("#chEdit");f&&f.scrollIntoView({behavior:"smooth"})},50)} else setView(k); return}
+  if(e.target.closest("[data-sidecol]")){document.body.classList.toggle("sidecol");try{localStorage.setItem("yf-sidecol",document.body.classList.contains("sidecol")?"1":"0")}catch(x){}return}
+  if(e.target.closest("[data-use]")) setView("home");                       // swipe "Use as reference" fills the intake form on Pipeline
+  if(e.target.closest("#hero .next")) setView("desk");
+},true);
+document.addEventListener("click",async e=>{
+  const a=e.target.closest("[data-kwseed],[data-seoload]"); if(a){e.preventDefault();
+    if(a.dataset.kwseed!=null){$("#kwIn").value=a.dataset.kwseed;$("#kwForm").requestSubmit()}
+    else{const x=(((selVideo()||{}).idea||{}).titles||[])[+a.dataset.seoload];if(x){seo.t=x.t;renderSeo()}} return}
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.joblog){showJob=b.dataset.joblog;const j=jobs.find(x=>x.id===showJob);if(j&&j.video){sel=j.video;try{localStorage.setItem("yf-sel",sel)}catch(x){}}ptab="run";ptabChosen=true;setView("desk");renderProd();document.querySelector(".live")?.scrollIntoView();return}
+  if(b.dataset.compscan){const s=document.querySelector('[data-scan="competitors"]');if(s){s.click();say("Competitor scan queued — the laptop runs it now.","good")}setTimeout(renderComp,1500);return}
+  if(b.dataset.kwseo){seo.k=b.dataset.kwseo;seo.t=seo.t||"";setView("seo");return}
+  if(b.dataset.seorun){seo.t=$("#seoT").value;seo.k=$("#seoK").value;seo.d=$("#seoD").value;seo.ac=seo.k.trim()?await suggest(seo.k.trim()):null;renderSeo();return}
+  if(b.dataset.seocopy){const t=[...document.querySelectorAll("#vSeo .tags span")].map(x=>x.textContent).join(", ");try{await navigator.clipboard.writeText(t);say("Tags copied.","good")}catch(x){say(t,"good")}return}
+  if(!db) return;
+  if(b.dataset.kwcheck){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:"kw",q:b.dataset.kwcheck});say("Queued — the laptop reads the top 10 results (free, ~1 min).","good");renderKwList();return}
+  if(b.dataset.kwsave){const c=chDoc();const k=[...new Set([...(c.keywords||[]),b.dataset.kwsave])];await db.collection("channels").doc(c.id).update({keywords:k,updated:now()});say("Saved to the channel's scan keywords.","good");return}
+  if(b.dataset.seouse){const v=selVideo();if(!v||!seo.t.trim())return;await db.collection("videos").doc(v.id).update({title:seo.t.trim(),titlePicked:true,angle:v.angle!=null?v.angle:v.title,updated:now()});say("Title set on the video.","good");return}
+});
+document.addEventListener("submit",async e=>{ if(e.target.id!=="kwForm") return; e.preventDefault();
+  const q=$("#kwIn").value.trim(); if(!q||kwBusy) return; kwSeed=q; kwBusy=true; renderKw(); kwList=await explore(q); kwBusy=false; renderKw();
+  if(!kwList.length) say("No suggestions came back — check your connection or try a shorter topic.","err");
+});
+setView(view);
+})();
+</script>
+
 </body></html>
