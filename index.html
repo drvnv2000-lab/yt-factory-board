@@ -1220,35 +1220,56 @@ function renderComp(){
 }
 // ---------- Title & SEO lab
 const POWER=/\b(secret|hidden|untold|truth|why|how|rise|fall|collapse|lost|empire|dynasty|richest|billion|trillion|forgotten|inside|real|myth|quietly|owns?|controls?)\b/i;
-const BAIT=/(you won'?t believe|shocking|gone wrong|!!+|\?\?+)/i;
-let seo={t:"",k:"",d:"",ac:null};
+const BAIT=/(you won'?t believe|shocking|gone wrong|!!+|\?\?+)/i, EMOJI=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+let seo={t:"",k:"",d:"",tags:"",th:"",ac:null};
+window.seoLoad=o=>{Object.assign(seo,o||{});seo.ac=null;setView("seo")};
 function seoChecks(){const t=seo.t.trim(),k=seo.k.trim().toLowerCase(),d=seo.d.trim(),L=t.length,tl=t.toLowerCase(),R=[];
-  const add=(ok,w,txt)=>R.push({ok,w,txt});
-  add(L>=30&&L<=70,20,`Length ${L} characters (aim for 45–65; YouTube cuts at ~70)`);
-  add(L<=55||POWER.test(t.slice(0,55)),10,`The hook survives the phone cut-off: “${t.slice(0,55)}${L>55?"…":""}”`);
-  if(k){add(tl.includes(k),15,`Contains the keyword “${k}”`);add(tl.indexOf(k)>=0&&tl.indexOf(k)<=L/2,10,"Keyword sits in the first half")}
-  add(/\d|\$|₹|£|€/.test(t),10,"Has a number, year or money figure (specific beats vague)");
-  add(POWER.test(t),10,"Uses a curiosity/stakes word (secret, rise, fall, empire, why…)");
-  add(!BAIT.test(t)&&(t.match(/\b[A-Z]{4,}\b/g)||[]).length<=2,10,"No clickbait phrasing or shouting caps");
+  const add=(ok,w,txt,grp)=>R.push({ok,w,txt,grp});
+  // title (10)
+  add(L>=30&&L<=70,12,`Length ${L} characters (aim for 45–65; it shows in full under ~70)`,"Title");
+  add(L<=100,4,"Under YouTube's 100-character hard limit","Title");
+  add(L<=55||POWER.test(t.slice(0,55)),8,`The hook survives the phone cut-off: “${t.slice(0,55)}${L>55?"…":""}”`,"Title");
+  if(k){add(tl.includes(k),10,`Contains the search phrase “${k}”`,"Title");add(tl.indexOf(k)>=0&&tl.indexOf(k)+k.length<=40,6,"Search phrase sits in the first 40 characters","Title")}
+  add(/\d|\$|₹|£|€/.test(t),6,"Has a number, year or money figure (specific beats vague)","Title");
+  add(POWER.test(t),6,"Uses a curiosity or stakes word (secret, rise, fall, empire, why…)","Title");
+  add(!BAIT.test(t)&&!EMOJI.test(t)&&(t.match(/\b[A-Z]{4,}\b/g)||[]).length<=2,6,"No clickbait phrasing, emojis or shouting caps","Title");
   const words=s=>new Set(s.toLowerCase().match(/[a-z0-9$]+/g)||[]), A=words(t);
   const near=swipe.map(o=>{const B=words(o.title||"");const i=[...A].filter(x=>B.has(x)).length;return {o,j:i/Math.max(1,new Set([...A,...B]).size)}}).sort((a,b)=>b.j-a.j)[0];
-  add(!near||near.j<.6,10,near&&near.j>=.6?`Too close to a competitor title: “${near.o.title}”`:"Original — not a copy of a swipe-file title");
-  if(k&&seo.ac) add(seo.ac.length>0,5,seo.ac.length?`People search it — YouTube suggests ${seo.ac.length} phrases for “${k}”`:`YouTube suggests nothing for “${k}” — few people type it`);
-  if(d){add(d.toLowerCase().slice(0,150).includes(k||"\u0000"),5,"Description mentions the keyword in its first 150 characters");add(d.length>=200,5,`Description ${d.length} characters (aim 200+)`)}
+  add(!near||near.j<.6,8,near&&near.j>=.6?`Too close to a competitor title: “${near.o.title}”`:"Original — not a copy of a swipe-file title","Title");
+  const tw=t.split(/\s+/).filter(Boolean); add(tw.length<=12&&tw.reduce((s,x)=>s+x.length,0)/Math.max(1,tw.length)<=7,4,"Easy to read at a glance (≤12 words, short words)","Title");
+  if(k&&seo.ac) add(seo.ac.length>0,6,seo.ac.length?`People search it — YouTube suggests ${seo.ac.length} phrases for “${k}”`:`YouTube suggests nothing for “${k}” — few people type it`,"Search");
+  // description (4)
+  if(d){const first=d.slice(0,150).toLowerCase();
+    add(k?first.includes(k):first.length>=100,6,k?"Search phrase in the first 150 characters (shown before “more”)":"First 150 characters carry a full sentence","Description");
+    add(d.length>=200,3,`Description ${d.length} characters (aim 200+)`,"Description");
+    add((d.match(/^\s*[-•*]\s+/gm)||[]).length>=3,3,"Has 3+ “in this video” bullets","Description");
+    const ts=[...d.matchAll(/^\s*\(?(\d{1,2}:\d{2}(?::\d{2})?)\)?\s+\S/gm)].map(m=>m[1]);
+    add(ts.length>=3&&/^0?0:00$/.test(ts[0]),6,ts.length?`${ts.length} chapters${/^0?0:00$/.test(ts[0])?"":" — the first must be 0:00"}`:"No chapters — add at least 3, starting at 0:00","Description")}
+  // tags (2)
+  const tg=seo.tags.split(",").map(x=>x.trim()).filter(Boolean);
+  if(tg.length){add(tg.length<=20&&tg.every(x=>x.length<=30)&&tg.join(", ").length<500,4,`${tg.length} tags, ${tg.join(", ").length}/500 characters${tg.some(x=>x.length>30)?" — some tags are over 30 characters":""}`,"Tags");
+    const cnt={};tg.join(" ").toLowerCase().split(/\s+/).forEach(w=>cnt[w]=(cnt[w]||0)+1);
+    add((!k||tg[0].toLowerCase()===k)&&Math.max(...Object.values(cnt))<8,3,k&&tg[0].toLowerCase()!==k?"Put the exact search phrase as the first tag":"No keyword stuffing (no word 8+ times)","Tags")}
+  // thumbnail text (1)
+  if(seo.th.trim()){const th=seo.th.trim().split(/\s+/),rep=th.filter(w=>A.has(w.toLowerCase().replace(/[^a-z0-9$]/g,""))).length;
+    add(th.length<=3&&rep<=1,6,th.length>3?`Thumbnail text has ${th.length} words — keep it to 2–3`:rep>1?"Thumbnail text repeats the title — make it add something":"Thumbnail text is short and adds to the title","Thumbnail")}
   const tot=R.reduce((s,x)=>s+x.w,0)||1; return {R,score:Math.round(R.filter(x=>x.ok).reduce((s,x)=>s+x.w,0)/tot*100)};
 }
 function renderSeo(){
-  const el=$("#vSeo"); if(!el) return; const v=selVideo(); const ideas=((v&&v.idea)||{}).titles||[];
+  const el=$("#vSeo"); if(!el) return; const v=selVideo(); const ideas=((v&&v.idea)||{}).titles||[], md=v&&v.sync&&v.sync.metadata;
   const {R,score}=seo.t?seoChecks():{R:[],score:0};
-  const tags=[...new Set([seo.k,...(seo.ac||[]),...((seo.t.match(/[A-Za-z][A-Za-z'’-]{3,}/g)||[]).map(x=>x.toLowerCase()))].filter(Boolean))].slice(0,25);
-  el.innerHTML=`<div class="sh" style="margin:0"><h3>Title & SEO lab</h3><p>Check a title before you commit: length, phone cut-off, keyword, specificity, originality vs. competitors, and whether people actually search the phrase. Thumbnails: Production desk → Package.</p></div>
-   <div class="bar2"><input type="text" id="seoT" value="${esc(seo.t)}" placeholder="Title to check"><input type="text" id="seoK" value="${esc(seo.k)}" placeholder="Target keyword (optional)" style="max-width:280px"><button class="gold" data-seorun="1">Check</button></div>
-   <textarea id="seoD" rows="3" placeholder="Description draft (optional)">${esc(seo.d)}</textarea>
+  const tagIdeas=[...new Set([seo.k,...(seo.ac||[]),...((seo.t.match(/[A-Za-z][A-Za-z'’-]{3,}/g)||[]).map(x=>x.toLowerCase()))].filter(Boolean))].filter(x=>x.length<=30).slice(0,20);
+  const groups=[...new Set(R.map(x=>x.grp))];
+  el.innerHTML=`<div class="sh" style="margin:0"><h3>Title & SEO lab</h3><p>Up to 18 checks across title, search phrase, description, chapters, tags and thumbnail text, all following PLAYBOOK §11–12. Fill in only what you have.</p></div>
+   <div class="bar2"><input type="text" id="seoT" value="${esc(seo.t)}" placeholder="Title to check"><input type="text" id="seoK" value="${esc(seo.k)}" placeholder="Search phrase (optional)" style="max-width:260px"><input type="text" id="seoTh" value="${esc(seo.th)}" placeholder="Thumbnail text" style="max-width:200px"><button class="gold" data-seorun="1">Check</button></div>
+   <textarea id="seoD" rows="4" placeholder="Description draft with chapters (optional)">${esc(seo.d)}</textarea>
+   <input type="text" id="seoTags" value="${esc(seo.tags)}" placeholder="Tags, comma separated (optional)">
    ${ideas.length?`<p class="note">Claude's titles for ${v.ep?"Video "+esc(v.ep):"this video"}: ${ideas.map((x,i)=>`<a href="#" data-seoload="${i}">${esc(x.t)}</a>`).join(" · ")}</p>`:""}
-   ${seo.t?`<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><span class="bigscore">${score}</span><span class="note">/100 title score</span>
+   ${md?`<p class="note"><a href="#" data-seometa="1">Load this video's description, tags and search phrase from the metadata package</a></p>`:""}
+   ${seo.t?`<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><span class="bigscore">${score}</span><span class="note">/100 · ${R.filter(x=>x.ok).length}/${R.length} checks pass</span>
       ${v?`<button data-seouse="1">Use as title for ${v.ep?"Video "+esc(v.ep):"current video"}</button>`:""}</div>
-     <div class="seoc">${R.map(x=>`<div><b class="${x.ok?"p":"w"}">${x.ok?"✓":"!"}</b><span>${esc(x.txt)}</span></div>`).join("")}</div>
-     <div><h4>Tag ideas (${tags.join(", ").length}/500 chars)</h4><div class="tags">${tags.map(x=>`<span>${esc(x)}</span>`).join("")}</div><button style="margin-top:8px" data-seocopy="1">Copy tags</button></div>`:""}`;
+     ${groups.map(g=>`<div class="seoc"><h4 style="margin:6px 0 0">${esc(g)}</h4>${R.filter(x=>x.grp===g).map(x=>`<div><b class="${x.ok?"p":"w"}">${x.ok?"✓":"!"}</b><span>${esc(x.txt)}</span></div>`).join("")}</div>`).join("")}
+     <div><h4>Tag ideas (${tagIdeas.join(", ").length}/500 chars)</h4><div class="tags">${tagIdeas.map(x=>`<span>${esc(x)}</span>`).join("")}</div><button style="margin-top:8px" data-seocopy="1">Copy tags</button></div>`:""}`;
 }
 // ---------- Jobs & laptop
 function renderJobs(){
@@ -1301,6 +1322,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("#hero .next")) setView("desk");
 },true);
 document.addEventListener("click",async e=>{
+  const m=e.target.closest("[data-seometa]"); if(m){e.preventDefault();const v=selVideo(),md=v&&v.sync&&v.sync.metadata;if(md){seo.t=seo.t||v.title||"";seo.k=md.keyword||seo.k;seo.d=(md.description||"")+((md.chapters||[]).length&&!/\b0:00\b/.test(md.description||"")?"\n\n"+md.chapters.map(c=>c.t+" "+c.title).join("\n"):"");seo.tags=(md.tags||[]).join(", ");renderSeo()}return}
   const a=e.target.closest("[data-kwseed],[data-seoload]"); if(a){e.preventDefault();
     if(a.dataset.kwseed!=null){$("#kwIn").value=a.dataset.kwseed;$("#kwForm").requestSubmit()}
     else{const x=(((selVideo()||{}).idea||{}).titles||[])[+a.dataset.seoload];if(x){seo.t=x.t;renderSeo()}} return}
@@ -1310,7 +1332,7 @@ document.addEventListener("click",async e=>{
   if(b.dataset.radarwin){radarWin=+b.dataset.radarwin;renderRadar();return}
   if(b.dataset.radaruse){setView("home");const i=$("#refUrl");if(i){i.value=b.dataset.radaruse;i.focus();say("Reference filled in — add your angle and press Add idea.","good")}return}
   if(b.dataset.kwseo){seo.k=b.dataset.kwseo;seo.t=seo.t||"";setView("seo");return}
-  if(b.dataset.seorun){seo.t=$("#seoT").value;seo.k=$("#seoK").value;seo.d=$("#seoD").value;seo.ac=seo.k.trim()?await suggest(seo.k.trim()):null;renderSeo();return}
+  if(b.dataset.seorun){seo.t=$("#seoT").value;seo.k=$("#seoK").value;seo.d=$("#seoD").value;seo.tags=$("#seoTags").value;seo.th=$("#seoTh").value;seo.ac=seo.k.trim()?await suggest(seo.k.trim()):null;renderSeo();return}
   if(b.dataset.seocopy){const t=[...document.querySelectorAll("#vSeo .tags span")].map(x=>x.textContent).join(", ");try{await navigator.clipboard.writeText(t);say("Tags copied.","good")}catch(x){say(t,"good")}return}
   if(!db) return;
   if(b.dataset.radarrun||b.dataset.growthrun){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:b.dataset.radarrun?"radar":"growth"});say("Queued — the laptop runs it now (free).","good");return}
@@ -1329,6 +1351,44 @@ document.addEventListener("submit",async e=>{ if(e.target.id!=="kwForm") return;
 });
 setView(view);
 })();
+</script>
+
+<script>
+/* ===== v7 (2026-11-04): hook lab + metadata package (from youtube-marketing-skills, adapted; rules in PLAYBOOK §9-12) ===== */
+LANES.find(l=>l.name==="Script").steps.unshift(["claude_hook","5 hook options",1]);
+LANES.find(l=>l.name==="Render").steps.push(["claude_metadata","Description, chapters, tags",1]);
+const _tabIdea7=tabIdea;
+tabIdea=function(v){
+  let h=_tabIdea7(v); if(!(v.idea&&v.idea.status==="ok")) return h;
+  const hk=v.hooks, j=lastJob(v.id,"claude_hook"), busy=j&&["queued","running"].includes(j.status);
+  const sec=`<div><div class="prod-h"><div><h4>Opening hook · first 28–42 seconds</h4><p class="note">5 ways to open: cold-open scene, shocking number, mystery question, contrarian claim, personal story. The one you pick opens the script.${j?` Last run: <a href="#" data-showjob="${esc(j.id)}">${esc(j.status)} ${esc(ago(j.ended||j.created))} · view log</a>`:""}</p></div>
+    <button ${hk?"":'class="gold"'} data-run="claude_hook" ${busy||!v.titlePicked?"disabled":""} title="${v.titlePicked?"":"Pick a title first"}">${busy?"Working…":hk?"New hooks · Claude":"Write 5 hooks · Claude"}</button></div>
+    ${hk?`<div class="tl">${(hk.hooks||[]).map((x,i)=>{const on=v.hook===x.text;return `<div class="tli ${on?"on":""}"><span><b>${esc(x.type||"")}${i===hk.recommended?" · recommended":""}</b> <small>${esc(x.secs||"?")}s · drop-off risk ${esc(x.risk||"?")}${x.why?" · "+esc(x.why):""}</small>
+      <span style="display:block;margin-top:4px">“${esc(x.text||"")}”</span>${x.visual?`<small>On screen: ${esc(x.visual)}</small>`:""}</span>
+      <button ${on?'class="gold" disabled':""} data-usehook="${i}">${on?"Chosen":"Use"}</button></div>`}).join("")}</div>`:`<p class="note">${v.titlePicked?"Not written yet.":"Pick a title first, then write hooks."}</p>`}</div>`;
+  return h.replace(/<\/div>$/,sec+"</div>");
+};
+function metaHTML(v){
+  const md=v.sync&&v.sync.metadata, j=lastJob(v.id,"claude_metadata"), busy=j&&["queued","running"].includes(j.status);
+  const head=`<div class="prod-h" style="margin-top:18px"><div><h4>Description, chapters, tags, pinned comment</h4><p class="note">Written from the script and beat sheet using PLAYBOOK §12.${j?` Last run: <a href="#" data-showjob="${esc(j.id)}">${esc(j.status)} ${esc(ago(j.ended||j.created))} · view log</a>`:""}</p></div>
+    <button class="gold" data-run="claude_metadata" ${busy?"disabled":""}>${busy?"Working…":md?"Rewrite · Claude":"Write it · Claude"}</button></div>`;
+  if(!md) return head+`<p class="note">Needs a script for this video first.</p>`;
+  const ch=(md.chapters||[]).map(c=>`${c.t} ${c.title}`).join("\n"), full=(md.description||"")+(ch&&!/\b0:00\b/.test(md.description||"")?"\n\nChapters\n"+ch:"");
+  const box=(id,label,txt)=>`<div><div class="prod-h"><b>${label}</b><button data-copytxt="${id}">Copy</button></div><pre id="${id}" style="white-space:pre-wrap;max-height:260px;overflow:auto">${esc(txt)}</pre></div>`;
+  return head+`<p class="note">Search phrase: <b>${esc(md.keyword||"—")}</b> · <a href="#" data-metaseo="1">Check it in the Title & SEO lab</a></p>`+
+    box("mdDesc","Description",full)+box("mdTags",`Tags · ${(md.tags||[]).length} · ${(md.tags||[]).join(", ").length}/500 chars`,(md.tags||[]).join(", "))+
+    ((md.hashtags||[]).length?box("mdHash","Hashtags",(md.hashtags||[]).join(" ")):"")+box("mdPin","Pinned comment",md.pinned||"");
+}
+const _tabPackage7=tabPackage; tabPackage=function(v){return _tabPackage7(v)+metaHTML(v)};
+document.addEventListener("click",async e=>{
+  const ms=e.target.closest("[data-metaseo]"); if(ms){e.preventDefault();const v=selVideo(),md=v&&v.sync&&v.sync.metadata;if(md&&window.seoLoad){const ch=(md.chapters||[]).map(c=>c.t+" "+c.title).join("\n");
+    window.seoLoad({t:v.title||"",k:md.keyword||"",d:(md.description||"")+(ch&&!/\b0:00\b/.test(md.description||"")?"\n\n"+ch:""),tags:(md.tags||[]).join(", ")})}return}
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.copytxt){const t=document.getElementById(b.dataset.copytxt)?.textContent||"";try{await navigator.clipboard.writeText(t);say("Copied.","good")}catch(x){say("Select the text and copy it.","err")}return}
+  if(b.dataset.usehook&&db){const v=selVideo(),x=v&&((v.hooks||{}).hooks||[])[+b.dataset.usehook];if(!x)return;
+    await db.collection("videos").doc(v.id).update({hook:x.text,hookType:x.type||"",updated:now()});say("Hook chosen — the script will open with it.","good")}
+});
+renderAll();
 </script>
 
 </body></html>
