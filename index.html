@@ -257,7 +257,7 @@ body.settled .card,body.settled .sw{animation:none}
   <header class="top">
     <div class="brand">
       <div class="mark"><svg class="i"><use href="#i-film"/></svg></div>
-      <div><h1>YouTube Factory</h1><p>Business documentaries · production board</p></div>
+      <div><h1>YouTube Factory</h1><p id="brandSub">Production board</p></div>
     </div>
     <div class="pills" id="pills"></div>
   </header>
@@ -277,7 +277,7 @@ body.settled .card,body.settled .sw{animation:none}
     <div class="field"><label for="ceCad">Cadence</label><input id="ceCad"></div>
     <div class="field wide"><label for="ceNiche">Niche</label><input id="ceNiche"></div>
     <div class="field wide"><label for="ceComp">Competitor channels for scans (comma separated, e.g. @MagnatesMedia, @JakeTran)</label><input id="ceComp"></div>
-    <div class="field wide"><label for="ceKw">Niche keywords to scan (comma separated)</label><input id="ceKw" placeholder="e.g. family dynasty documentary, company collapse"></div>
+    <div class="field wide"><label for="ceKw">Niche keywords to scan (comma separated)</label><input id="ceKw" placeholder="e.g. your main topics, comma separated — collapse"></div>
     <div class="field"><label for="ceEng">Voice engine</label><select id="ceEng" style="min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px"><option value="chatterbox">Chatterbox</option><option value="kokoro">Kokoro</option></select></div>
     <div class="field"><label for="ceKv">Kokoro voice (if Kokoro)</label><input id="ceKv" placeholder="e.g. am_fenrir"></div>
     <div class="field"><label for="cePace">Pace (atempo, 0.8–1.1)</label><input id="cePace" inputmode="decimal"></div>
@@ -335,7 +335,7 @@ body.settled .card,body.settled .sw{animation:none}
     <div class="sh"><h3 id="swipe-h">Swipe file</h3><p>Videos that beat their own channel's median views. Pick one as the pattern for your next idea.</p></div>
     <form class="panel swtools" id="swTools" autocomplete="off">
       <button type="button" class="gold" data-scan="competitors">Scan competitors</button>
-      <input id="swQ" placeholder="Niche keyword, e.g. corporate scandal documentary" aria-label="Niche keyword">
+      <input id="swQ" placeholder="Niche keyword for this channel" aria-label="Niche keyword">
       <button type="button" data-scan="search">Scan niche</button>
       <input id="swUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube link to add">
       <button type="button" data-scan="url">Add video</button>
@@ -512,7 +512,7 @@ function renderSwipe(){
 function renderAll(){applyChannel();renderTabs();renderPills();renderHero();renderKpis();renderBoard();renderSwipe()}
 
 async function addIdea(refUrl,note){
-  const ch=cur==="all"?($("#chPick").value||"business-docs"):cur;
+  const ch=cur==="all"?($("#chPick").value||defCh()):cur;
   await db.collection("videos").add({channel:ch,title:note||"New idea from reference",stage:"idea",refUrl,formula:"",next:"Claude: outlier check + pattern brief",created:Date.now(),updated:Date.now()});
 }
 $("#addForm").addEventListener("submit",async e=>{
@@ -745,7 +745,7 @@ tabChecks=function(v){
 };
 let swMin=0, swSort="multiple";
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"K":String(n||0);
-const scanCh=()=>cur==="all"?($("#chPick").value||"business-docs"):cur;
+const scanCh=()=>cur==="all"?($("#chPick").value||defCh()):cur;
 renderSwipe=function(){
   if(!db){$("#filters").innerHTML="";$("#swipe").innerHTML=`<div class="empty">Unlock the board to see the swipe file.</div>`;$("#swStat").textContent="";return}
   const last=jobs.filter(j=>["scan","tag"].includes(j.step)&&(cur==="all"||j.channel===cur)).sort((a,b)=>(b.created||0)-(a.created||0))[0];
@@ -780,7 +780,7 @@ $("#chEdit").addEventListener("submit",async e=>{e.preventDefault();if(!db)retur
 async function scanJob(mode){
   const ch=scanCh(), c=channels.find(x=>x.id===ch)||{};
   if(mode==="tag") return queueSwipe("tag",ch,{});
-  if(mode==="competitors"){if(!(c.competitors||[]).length&&ch!=="business-docs"){say("Add competitor channels first: Edit channel.","err");return} return queueSwipe("scan",ch,{mode,handles:c.competitors||[]})}
+  if(mode==="competitors"){if(!(c.competitors||[]).length)say("No competitors saved on the board for this channel — the laptop will use channel.json if it has any. Add them in Channel settings.","err"); return queueSwipe("scan",ch,{mode,handles:c.competitors||[]})}
   if(mode==="search"){const q=$("#swQ").value.trim()||(c.keywords||[])[0];if(!q){$("#swQ").focus();return} $("#swQ").value="";return queueSwipe("scan",ch,{mode,q})}
   if(mode==="url"){const u=$("#swUrl").value.trim();if(!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(u)){$("#swUrl").focus();return} $("#swUrl").value="";return queueSwipe("scan",ch,{mode,url:u})}
 }
@@ -852,7 +852,7 @@ function nextEp(ch){
   return pre+String(max+1).padStart(3,"0");
 }
 addIdea=async function(refUrl,note){
-  const ch=cur==="all"?($("#chPick").value||"business-docs"):cur, ep=nextEp(ch);
+  const ch=cur==="all"?($("#chPick").value||defCh()):cur, ep=nextEp(ch);
   await db.collection("videos").add({channel:ch,ep,title:note||"New idea from reference",stage:"idea",refUrl,formula:"",next:"Run Autopilot on the Idea lane (brief + score)",created:Date.now(),updated:Date.now()});
   say(`Added as Video ${ep}.`,"good");
 };
@@ -1085,7 +1085,7 @@ renderProd=function(){
     t.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ptab==="idea"))}
 };
 addIdea=async function(refUrl,note){
-  const ch=cur==="all"?($("#chPick").value||"business-docs"):cur, ep=nextEp(ch);
+  const ch=cur==="all"?($("#chPick").value||defCh()):cur, ep=nextEp(ch);
   const r=await db.collection("videos").add({channel:ch,ep,title:note||"New idea",angle:note||"",titlePicked:false,stage:"idea",refUrl,refs:[refUrl],formula:"",created:Date.now(),updated:Date.now()});
   sel=r.id; try{localStorage.setItem("yf-sel",sel)}catch(e){} ptab="idea"; ptabChosen=true;
   say(`Added as Video ${ep}. Next: Production desk → Idea → Run Idea step.`,"good");
@@ -1160,7 +1160,8 @@ window.setView=function(v){view=v;try{localStorage.setItem("yf-view",v)}catch(e)
   document.querySelectorAll("#side [data-view]").forEach(b=>b.setAttribute("aria-current",b.dataset.view===v?"page":"false"));
   renderTool(); window.scrollTo({top:0});
 };
-function renderTool(){ if(view==="kw")renderKw(); else if(view==="comp")renderComp(); else if(view==="radar")renderRadar(); else if(view==="seo")renderSeo(); else if(view==="jobs")renderJobs(); }
+function renderTool(){ renderTool2(); const sec=({kw:"#vKw",radar:"#vRadar",comp:"#vComp",seo:"#vSeo"})[view]; const el=sec&&$(sec); if(el&&cur==="all"&&channels.length>1) el.insertAdjacentHTML("afterbegin",`<p class="note">Showing <b>${esc((channels.find(c=>c.id===toolCh())||{}).name||toolCh())}</b> — pick a channel tab at the top to switch.</p>`) }
+function renderTool2(){ if(view==="kw")renderKw(); else if(view==="comp")renderComp(); else if(view==="radar")renderRadar(); else if(view==="seo")renderSeo(); else if(view==="jobs")renderJobs(); }
 const _ra5=renderAll; renderAll=function(){_ra5(); if(["comp","jobs","radar"].includes(view)&&!(document.activeElement&&document.activeElement.closest(".tool"))) renderTool(); else if(view==="kw") renderKwList()};
 
 // ---------- free YouTube autocomplete (JSONP; demand signal, NOT search volume)
@@ -1172,13 +1173,13 @@ function suggest(q){ if(acCache[q]) return Promise.resolve(acCache[q]);
     s.src=`https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=en&q=${encodeURIComponent(q)}&callback=${cb}`; s.onerror=()=>{clearTimeout(t);done([])}; document.head.appendChild(s)})}
 async function explore(seed){
   const base=await suggest(seed), out=new Map(); base.forEach((x,i)=>out.set(x,{q:x,top:true,rank:i}));
-  const pre=["", ..."abcdefghijklmnopqrstuvwxyz".split("")].slice(1).map(c=>seed+" "+c).concat(["how "+seed,"why "+seed,seed+" documentary"]);
+  const pre=["", ..."abcdefghijklmnopqrstuvwxyz".split("")].slice(1).map(c=>seed+" "+c).concat(["how "+seed,"why "+seed,seed+" "+({documentary:"documentary",explainer:"explained",tutorial:"tutorial","kids/cartoon":"for kids","list/countdown":"top 10"}[chDoc().format||"documentary"]||"")]);
   for(let i=0;i<pre.length;i+=6){(await Promise.all(pre.slice(i,i+6).map(suggest))).flat().forEach((x,k)=>{if(!out.has(x))out.set(x,{q:x,top:false,rank:10+k})})}
   return [...out.values()];
 }
 // ---------- Keywords & content gaps
 let kwSeed="", kwList=[], kwBusy=false;
-const chDoc=()=>channels.find(c=>c.id===(cur==="all"?"business-docs":cur))||{};
+const chDoc=()=>channels.find(c=>c.id===(toolCh()))||{};
 const med=a=>{const s=[...a].filter(x=>x!=null).sort((x,y)=>x-y);return s.length?s[Math.floor(s.length/2)]:0};
 function gapOf(r){ if(!r||!r.top||!r.top.length) return null;
   const top=r.top, m=med(top.map(x=>x.views||0)), yr=d=>d?+String(d).slice(0,4):0, Y=new Date().getFullYear();
@@ -1219,7 +1220,7 @@ function renderComp(){
    ${rows.length?`<div class="tscroll"><table class="tbl"><thead><tr><th>Channel</th><th>Outliers</th><th>Best</th><th>Usual views</th><th>Winning formulas</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.k)}</b></td><td>${r.n}</td><td>${Number(r.best.multiple||0).toFixed(1)}× <small><a href="${esc(safeUrl(r.best.url)||"#")}" target="_blank" rel="noopener">${esc((r.best.title||"").slice(0,60))}</a></small></td><td>${nfmt(r.medv)}</td><td>${r.f.map(x=>`<span class="chip">${esc(x)}</span>`).join(" ")||"—"}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">No scan data yet.</p>`}`;
 }
 // ---------- Title & SEO lab
-const POWER=/\b(secret|hidden|untold|truth|why|how|rise|fall|collapse|lost|empire|dynasty|richest|billion|trillion|forgotten|inside|real|myth|quietly|owns?|controls?)\b/i;
+const POWER=/\b(secret|hidden|untold|truth|why|how|what|rise|fall|collapse|lost|empire|dynasty|richest|billion|trillion|forgotten|inside|real|myth|quietly|owns?|controls?|never|finally|actually|surprising|mistake|best|worst|easy|simple|fast|first|last|only|biggest|smallest|weird|strange|amazing|guess|can you|ultimate|without)\b/i;
 const BAIT=/(you won'?t believe|shocking|gone wrong|!!+|\?\?+)/i, EMOJI=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 let seo={t:"",k:"",d:"",tags:"",th:"",ac:null};
 window.seoLoad=o=>{Object.assign(seo,o||{});seo.ac=null;setView("seo")};
@@ -1231,7 +1232,7 @@ function seoChecks(){const t=seo.t.trim(),k=seo.k.trim().toLowerCase(),d=seo.d.t
   add(L<=55||POWER.test(t.slice(0,55)),8,`The hook survives the phone cut-off: “${t.slice(0,55)}${L>55?"…":""}”`,"Title");
   if(k){add(tl.includes(k),10,`Contains the search phrase “${k}”`,"Title");add(tl.indexOf(k)>=0&&tl.indexOf(k)+k.length<=40,6,"Search phrase sits in the first 40 characters","Title")}
   add(/\d|\$|₹|£|€/.test(t),6,"Has a number, year or money figure (specific beats vague)","Title");
-  add(POWER.test(t),6,"Uses a curiosity or stakes word (secret, rise, fall, empire, why…)","Title");
+  add(POWER.test(t),6,"Uses a curiosity or stakes word (secret, why, never, biggest, mistake…)","Title");
   add(!BAIT.test(t)&&!EMOJI.test(t)&&(t.match(/\b[A-Z]{4,}\b/g)||[]).length<=2,6,"No clickbait phrasing, emojis or shouting caps","Title");
   const words=s=>new Set(s.toLowerCase().match(/[a-z0-9$]+/g)||[]), A=words(t);
   const near=swipe.map(o=>{const B=words(o.title||"");const i=[...A].filter(x=>B.has(x)).length;return {o,j:i/Math.max(1,new Set([...A,...B]).size)}}).sort((a,b)=>b.j-a.j)[0];
@@ -1335,9 +1336,9 @@ document.addEventListener("click",async e=>{
   if(b.dataset.seorun){seo.t=$("#seoT").value;seo.k=$("#seoK").value;seo.d=$("#seoD").value;seo.tags=$("#seoTags").value;seo.th=$("#seoTh").value;seo.ac=seo.k.trim()?await suggest(seo.k.trim()):null;renderSeo();return}
   if(b.dataset.seocopy){const t=[...document.querySelectorAll("#vSeo .tags span")].map(x=>x.textContent).join(", ");try{await navigator.clipboard.writeText(t);say("Tags copied.","good")}catch(x){say(t,"good")}return}
   if(!db) return;
-  if(b.dataset.radarrun||b.dataset.growthrun){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:b.dataset.radarrun?"radar":"growth"});say("Queued — the laptop runs it now (free).","good");return}
+  if(b.dataset.radarrun||b.dataset.growthrun){b.disabled=true;await queueSwipe("scan",toolCh(),{mode:b.dataset.radarrun?"radar":"growth"});say("Queued — the laptop runs it now (free).","good");return}
   if(b.dataset.ytkeydel){if(!confirm("Remove the YouTube API key from the laptop?"))return;await db.collection("runner").doc("laptop").update({ytKeyNew:"-"});say("Removing — the laptop confirms in a few seconds.","good");return}
-  if(b.dataset.kwcheck){b.disabled=true;await queueSwipe("scan",cur==="all"?"business-docs":cur,{mode:"kw",q:b.dataset.kwcheck});say("Queued — the laptop reads the top 10 results (free, ~1 min).","good");renderKwList();return}
+  if(b.dataset.kwcheck){b.disabled=true;await queueSwipe("scan",toolCh(),{mode:"kw",q:b.dataset.kwcheck});say("Queued — the laptop reads the top 10 results (free, ~1 min).","good");renderKwList();return}
   if(b.dataset.kwsave){const c=chDoc();const k=[...new Set([...(c.keywords||[]),b.dataset.kwsave])];await db.collection("channels").doc(c.id).update({keywords:k,updated:now()});say("Saved to the channel's scan keywords.","good");return}
   if(b.dataset.seouse){const v=selVideo();if(!v||!seo.t.trim())return;await db.collection("videos").doc(v.id).update({title:seo.t.trim(),titlePicked:true,angle:v.angle!=null?v.angle:v.title,updated:now()});say("Title set on the video.","good");return}
 });
@@ -1396,6 +1397,20 @@ renderAll();
 (function(){const f=$("#ceStyle")&&$("#ceStyle").closest(".field"); if(f) f.insertAdjacentHTML("beforebegin",`<div class="field"><label for="ceFmt">Format (sets hook types)</label><select id="ceFmt" style="min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px">${["documentary","explainer","tutorial","kids/cartoon","list/countdown"].map(x=>`<option>${x}</option>`).join("")}</select></div>`);
   const _oe=openEdit; openEdit=function(){_oe();const c=channels.find(x=>x.id===cur)||{};const s=$("#ceFmt");if(s)s.value=c.format||(/cartoon|kid/i.test((c.name||"")+(c.niche||""))?"kids/cartoon":"documentary")};
   const _ex=window.extraCh; window.extraCh=()=>({...(_ex?_ex():{}),format:($("#ceFmt")||{}).value||"documentary"});
+})();
+</script>
+<script>
+/* channel-agnostic helpers: no channel is special; legacy cards without a channel are tagged once */
+function defCh(){return ((channels||[])[0]||{}).id||"business-docs"}
+function toolCh(){return cur!=="all"?cur:(($("#chPick")||{}).value||defCh())}
+(function(){
+  let migrated=false;
+  const _ra8=renderAll; renderAll=function(){_ra8();
+    const c=channels.find(x=>x.id===cur), sub=$("#brandSub");
+    if(sub) sub.textContent=c?[c.niche||c.name,"production board"].filter(Boolean).join(" · "):`${channels.length} channel${channels.length===1?"":"s"} · production board`;
+    if(!migrated&&db&&allVideos.length&&channels.length){migrated=true;allVideos.filter(v=>!v.channel).forEach(v=>{v.channel="business-docs";db.collection("videos").doc(v.id).update({channel:"business-docs"})})}
+  };
+  renderAll();
 })();
 </script>
 </body></html>
