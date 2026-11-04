@@ -1473,4 +1473,19 @@ document.addEventListener("submit",async e=>{if(e.target.id!=="fbForm"||!db)retu
   await db.collection("videos").doc(v.id).update({feedback:[...(v.feedback||[]),item],updated:now()});say("Saved — the laptop files it into the rules on its next sync (within 2 min).","good")});
 renderAll();
 </script>
+<script>
+/* ===== v8b: Final QC must pass for the exact final file (sha256-bound); owner can accept flagged issues for that file only ===== */
+const finRender=v=>((v.sync||{}).renders||[]).filter(r=>/FINAL/i.test(r.name)).sort((a,b)=>(b.at||0)-(a.at||0))[0];
+const qcOk=v=>{const f=finRender(v),q=f&&f.qc;return !!(q&&q.bound&&(q.high===0||(v.overrides||{})["qc_"+q.sha]))};
+const _checks8=checks;
+checks=function(v){const a=_checks8(v),f=finRender(v),q=f&&f.qc;
+  a.push({id:"qc",name:"Final QC passed (this exact file)",ok:qcOk(v),
+    detail:!f?"No final render yet":!q?"Run Auto QC on the final render":!q.bound?"The final file changed after QC — run Auto QC again":q.high?`${q.high} high issue${q.high>1?"s":""}: ${(q.issues||[]).filter(x=>x.sev==="high").map(x=>x.what).slice(0,3).join("; ")}${(v.overrides||{})["qc_"+q.sha]?" — accepted by owner for this file":""}`:`clean · ${q.profile||"documentary"} profile · ${q.lufs} LUFS · ${q.hookCuts??"?"} changes in the first 30s · file ${q.sha}`});
+  return a};
+const _tabChecks8b=tabChecks;
+tabChecks=function(v){let h=_tabChecks8b(v);const f=finRender(v),q=f&&f.qc;
+  if(q&&q.bound&&q.high) h+=`<label class="note" style="display:block;margin-top:8px"><input type="checkbox" data-ovr="qc_${esc(q.sha)}" ${(v.overrides||{})["qc_"+q.sha]?"checked":""}> I watched those moments in ${esc(f.name)} — they are intended (applies to this exact file only)</label>`;
+  return h};
+renderAll();
+</script>
 </body></html>
