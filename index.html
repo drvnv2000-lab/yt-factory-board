@@ -1361,7 +1361,7 @@ const _tabIdea7=tabIdea;
 tabIdea=function(v){
   let h=_tabIdea7(v); if(!(v.idea&&v.idea.status==="ok")) return h;
   const hk=v.hooks, j=lastJob(v.id,"claude_hook"), busy=j&&["queued","running"].includes(j.status);
-  const sec=`<div><div class="prod-h"><div><h4>Opening hook · first 28–42 seconds</h4><p class="note">5 ways to open: cold-open scene, shocking number, mystery question, contrarian claim, personal story. The one you pick opens the script.${j?` Last run: <a href="#" data-showjob="${esc(j.id)}">${esc(j.status)} ${esc(ago(j.ended||j.created))} · view log</a>`:""}</p></div>
+  const sec=`<div><div class="prod-h"><div><h4>Opening hook · first 28–42 seconds</h4><p class="note">5 ways to open, using the hook types for this channel's format (Channel settings → Format; PLAYBOOK §9). The one you pick opens the script.${j?` Last run: <a href="#" data-showjob="${esc(j.id)}">${esc(j.status)} ${esc(ago(j.ended||j.created))} · view log</a>`:""}</p></div>
     <button ${hk?"":'class="gold"'} data-run="claude_hook" ${busy||!v.titlePicked?"disabled":""} title="${v.titlePicked?"":"Pick a title first"}">${busy?"Working…":hk?"New hooks · Claude":"Write 5 hooks · Claude"}</button></div>
     ${hk?`<div class="tl">${(hk.hooks||[]).map((x,i)=>{const on=v.hook===x.text;return `<div class="tli ${on?"on":""}"><span><b>${esc(x.type||"")}${i===hk.recommended?" · recommended":""}</b> <small>${esc(x.secs||"?")}s · drop-off risk ${esc(x.risk||"?")}${x.why?" · "+esc(x.why):""}</small>
       <span style="display:block;margin-top:4px">“${esc(x.text||"")}”</span>${x.visual?`<small>On screen: ${esc(x.visual)}</small>`:""}</span>
@@ -1391,4 +1391,11 @@ document.addEventListener("click",async e=>{
 renderAll();
 </script>
 
+<script>
+/* channel format (documentary / explainer / tutorial / kids / list) — picks the hook types and rules per channel */
+(function(){const f=$("#ceStyle")&&$("#ceStyle").closest(".field"); if(f) f.insertAdjacentHTML("beforebegin",`<div class="field"><label for="ceFmt">Format (sets hook types)</label><select id="ceFmt" style="min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0 10px">${["documentary","explainer","tutorial","kids/cartoon","list/countdown"].map(x=>`<option>${x}</option>`).join("")}</select></div>`);
+  const _oe=openEdit; openEdit=function(){_oe();const c=channels.find(x=>x.id===cur)||{};const s=$("#ceFmt");if(s)s.value=c.format||(/cartoon|kid/i.test((c.name||"")+(c.niche||""))?"kids/cartoon":"documentary")};
+  const _ex=window.extraCh; window.extraCh=()=>({...(_ex?_ex():{}),format:($("#ceFmt")||{}).value||"documentary"});
+})();
+</script>
 </body></html>
