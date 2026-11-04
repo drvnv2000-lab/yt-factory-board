@@ -1419,4 +1419,58 @@ function toolCh(){return cur!=="all"?cur:(($("#chPick")||{}).value||defCh())}
   renderAll();
 })();
 </script>
+<script>
+/* ===== v8 (2026-11-04): script checks gate (numbers & dates sourced, AI phrases, banned phrases), voice vs script check, owner feedback -> rules ===== */
+LANES.find(l=>l.name==="Script").steps.splice(LANES.find(l=>l.name==="Script").steps.findIndex(s=>s[0]==="claude_factcheck")+1,0,["scriptcheck","Numbers, dates & AI-phrase check"]);
+LANES.find(l=>l.name==="Voice").steps.push(["voicecheck","Voice vs script check"]);
+CHAINS.Script=[...CHAINS.Script,"scriptcheck"]; CHAINS.Voice=[...CHAINS.Voice,"voicecheck"];
+const scriptOk=v=>!!(v&&((v.sync&&v.sync.scriptcheck&&v.sync.scriptcheck.ok)||(v.overrides||{}).scriptcheck));
+const _stepRow8=stepRow;
+stepRow=function(v,st){let h=_stepRow8(v,st);
+  if(v&&["narration","voice"].includes(st[0])&&!scriptOk(v)) h=h.replace(/<button data-run="(narration|voice)"/,'<button disabled title="Blocked: run Numbers, dates & AI-phrase check and fix what it finds (or override in Checks)" data-run="$1"');
+  return h};
+const _canAdv8=canAdv; canAdv=v=>_canAdv8(v)&&(v.stage!=="script"||scriptOk(v));
+function scriptCheckHTML(v){
+  const s=v.sync&&v.sync.scriptcheck, j=lastJob(v.id,"scriptcheck");
+  const run=`<button data-run="scriptcheck" ${j&&["queued","running"].includes(j.status)?"disabled":""}>Run check (free)</button>`;
+  if(!s) return `<div class="ck"><span class="dot2"></span><div><b>Script checks</b><small>Not run yet. Every number and date in the script must match a verified fact before voice.</small> ${run}</div></div>`;
+  const g=s.gate||{}, list=(a,cls)=>a.map(x=>`<li><b class="${cls}">${esc(x.n||x.what||x.rule)}</b> — ${esc(x.line||x.tip||"")}${x.claim?` <small>(fact file: ${esc(x.status)})</small>`:""}</li>`).join("");
+  return `<div class="ck ${s.ok?"ok":""}"><span class="dot2"></span><div><b>Script checks — ${s.ok?"pass":"blocked"}</b>
+    <small>${g.reason?esc(g.reason):`${g.verified||0}/${g.checked||0} numbers & dates verified · ${(g.missing||[]).length} with no source · ${(g.unverified||[]).length} unverified`} · ${(s.lint||[]).length} AI-writing warnings · ${(s.regressions||[]).length} banned phrases · ${esc(ago(s.at))}</small> ${run}
+    ${(g.missing||[]).length?`<details open><summary>No source (${g.missing.length}) — add to the fact file or cut</summary><ul>${list(g.missing,"w")}</ul></details>`:""}
+    ${(g.unverified||[]).length?`<details open><summary>Not verified (${g.unverified.length})</summary><ul>${list(g.unverified,"w")}</ul></details>`:""}
+    ${(s.regressions||[]).length?`<details open><summary>Banned phrases (${s.regressions.length})</summary><ul>${list(s.regressions,"w")}</ul></details>`:""}
+    ${(s.lint||[]).length?`<details><summary>AI-writing warnings (${s.lint.length}) — not blocking</summary><ul>${list(s.lint,"")}</ul></details>`:""}
+    ${!s.ok?`<label><input type="checkbox" data-ovr="scriptcheck" ${(v.overrides||{}).scriptcheck?"checked":""}> I checked these myself — allow voice anyway</label>`:""}</div></div>`;
+}
+function voiceCheckHTML(v){
+  const c=v.sync&&v.sync.voicecheck, j=lastJob(v.id,"voicecheck")||lastJob(v.id,"voicefix"), busy=j&&["queued","running"].includes(j.status);
+  if(!c) return `<div class="ck"><span class="dot2"></span><div><b>Voice vs script</b><small>Not run yet. Whisper listens to every paragraph and compares it with the script (skips, wrong numbers, misreads).</small> <button data-run="voicecheck" ${busy?"disabled":""}>Run check (free, GPU)</button></div></div>`;
+  return `<div class="ck ${c.ok?"ok":""}"><span class="dot2"></span><div><b>Voice vs script — ${c.ok?"pass":c.failed+" of "+c.paras+" paragraphs failed"}</b><small>${esc(c.model||"")} · ${esc(ago(c.at))}</small>
+    <button data-run="voicecheck" ${busy?"disabled":""}>Check again</button> ${c.ok?"":`<button class="gold" data-run="voicefix" ${busy?"disabled":""} title="Moves only the failing paragraphs' audio aside, re-records them, then finalize + word timings + check again">Re-record the ${c.failed} failing paragraph${c.failed>1?"s":""}</button>`}
+    ${(c.report||[]).length?`<ul>${c.report.map(r=>`<li><b class="w">¶${r.i+1}: ${esc(r.why)}</b><br><small>Script: ${esc(r.text||"")}</small>${r.heard?`<br><small>Heard: ${esc(r.heard)}</small>`:""}</li>`).join("")}</ul>`:""}</div></div>`;
+}
+const _tabChecks8=tabChecks;
+tabChecks=function(v){return `<div class="chk">${scriptCheckHTML(v)}${voiceCheckHTML(v)}</div><h4 style="margin:14px 0 6px">Render checks</h4>`+_tabChecks8(v)};
+// ---- Feedback -> rules
+const SCOPES=[["video","This video only"],["channel","Always, for this channel"],["all","Always, all channels"],["mistake","Mistake — never repeat"]];
+function tabFeedback(v){
+  const fb=[...(v.feedback||[])].reverse();
+  return `<p class="note">Tell Claude what to change. Pick where it applies: this video only, a rule for this channel (channels/&lt;id&gt;/RULES.md), a rule for all channels (PLAYBOOK), or a mistake to never repeat (also checked automatically if you give a banned phrase). Every Claude step reads these.</p>
+   <form class="ask" id="fbForm" style="display:grid;gap:8px"><textarea id="fbText" rows="3" placeholder="e.g. Intro is too slow — get to the first number in 5 seconds" style="font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:8px 10px"></textarea>
+   <div class="bar2" style="display:flex;gap:8px;flex-wrap:wrap"><select id="fbScope" style="min-height:40px">${SCOPES.map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select>
+   <input type="text" id="fbBan" placeholder="Banned phrase (optional, for mistakes)" style="flex:1;min-width:200px"><button class="gold" type="submit">Save</button></div></form>
+   ${fb.length?`<div class="tl" style="margin-top:12px">${fb.map(f=>`<div class="tli"><span><b>${esc(f.text)}</b><small>${esc((SCOPES.find(s=>s[0]===f.scope)||["",""])[1])}${f.ban?` · banned: “${esc(f.ban)}”`:""} · ${f.applied?"saved to the rules on the laptop":"waiting for the laptop"} · ${esc(ago(f.at))}</small></span></div>`).join("")}</div>`:`<p class="note">No feedback yet.</p>`}`;
+}
+const _renderProd8=renderProd;
+renderProd=function(){_renderProd8();const t=$("#ptabs");if(!t)return;
+  if(!t.querySelector('[data-ptab="feedback"]'))t.querySelector('[data-ptab="files"]').insertAdjacentHTML("beforebegin",`<button data-ptab="feedback" aria-pressed="${ptab==="feedback"}">Feedback</button>`);
+  if(ptab==="feedback"&&!(document.activeElement&&document.activeElement.closest("#fbForm"))){const v=selVideo();$("#pbody").innerHTML=v?tabFeedback(v):`<p class="note">Add an idea first.</p>`;t.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.ptab==="feedback"))}};
+document.addEventListener("submit",async e=>{if(e.target.id!=="fbForm"||!db)return;e.preventDefault();const v=selVideo();if(!v)return;
+  const text=$("#fbText").value.trim();if(!text){$("#fbText").focus();return}
+  const item={id:"f"+now().toString(36),text,scope:$("#fbScope").value,ban:$("#fbBan").value.trim()||undefined,at:now(),applied:false};
+  $("#fbText").value="";$("#fbBan").value="";document.activeElement.blur();
+  await db.collection("videos").doc(v.id).update({feedback:[...(v.feedback||[]),item],updated:now()});say("Saved — the laptop files it into the rules on its next sync (within 2 min).","good")});
+renderAll();
+</script>
 </body></html>
